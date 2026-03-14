@@ -1,34 +1,45 @@
 #!/bin/bash
 
-# modify image pth accordingly
 USER=$(whoami)
-IMAGE="/lustre24/expphy/volatile/eic/$USER/images/jana2root.sif"
-BUILD_LOCAL=false
 
-while getopts "l" opt; do
+DOCKER_CONTAINER="onnx_cuda_root_jana2"
+SINGULARITY_IMAGE="image.sif"
+
+USE_DOCKER=true
+USE_SINGULARITY=false
+
+# parse options
+while getopts "s" opt; do
   case $opt in
-    l)
-      BUILD_LOCAL=true
-      ;;
+    s)
+        if [ ! -f "$SINGULARITY_IMAGE" ]; then
+            echo "Singularity image not found at $SINGULARITY_IMAGE. Abort."
+            exit 1
+        else
+            USE_SINGULARITY=true
+            USE_DOCKER=false
+        fi
+        ;;
   esac
 done
 
 
-if [ "$BUILD_LOCAL" = true ]; then
-    echo "Building locally..."
-    cmake -B build -S . -DJANA_DIR=$JANA_HOME/lib/JANA/cmake
-    cmake --build build -j 8
+CMD="cmake -B build -S . && cmake --build build -j8"
+
+if [ "$USE_DOCKER" = true ]; then
+    podman run \
+        --userns=keep-id \
+        --security-opt label=disable \
+        -v $(pwd):/workspace \
+        -w /workspace \
+        $DOCKER_CONTAINER \
+        bash -lc "$CMD"
+
 else
-    if [ ! -f "$IMAGE" ]; then
-        echo "Image not found at $IMAGE. Cannot build."
-        exit 1
-    fi
-    echo "Using Singularity image at $IMAGE"
+
     singularity exec \
         --bind $(pwd) \
-        $IMAGE \
-        bash -c "
-        cmake -B build -S .
-        cmake --build build -j 8
-        "   
+        $SINGULARITY_IMAGE \
+        bash -c "$CMD"
+
 fi
