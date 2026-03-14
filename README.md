@@ -4,24 +4,31 @@ This repository serves as a validation and testing suite for integrating Neutral
 
 ## 🛠 Setup & Installation
 
-You can build and run this project either natively on the **JLab ifarm** or via a **Singularity/Apptainer container**. 
+You can build and run this project either using **Docker/Podman container** or **Singularity/Apptainer container**. 
 
 > [!CAUTION]
 > **Avoid Environment Mixing:** Do not attempt to run a local build inside a container or vice-versa. Always clean your build directory when switching environments to prevent library conflicts.
 
-### Option 1: Local Build (JLab ifarm)
-1. Ensure [JANA2](https://github.com/JeffersonLab/JANA2) is installed on your system.
-2. Open `ifarm_local.sh` and update the `JANA_HOME` path to your local installation.
-3. Initialize the environment:
-   ```bash
-   source ifarm_local.sh
-   ```
-
-### Option 2: Containerized Build
-To ensure a reproducible environment with ROOT and JANA2 pre-installed, build the provided Singularity image:
+### Option 1: Docker / Podman on iFarm
+Build the docker image with the following command
 ```bash
-# Recommended: Run this on a high-capacity filesystem (e.g., /volatile or /work)
-singularity build ${image_dir}/jana2root.sif images/jana2root.def
+cd containers/docker
+docker build --userns=keep-id --security-opt label=disable -t ${tag} .
+```
+
+### Option 2: Singularity
+You are recommend to set up the CACHE and TMP directories for apptainer as the default location `$HOME/.apptainer` do not have enough space on ifarm. 
+```bash
+# e.g. in your .cscsh
+setenv APPTAINER_TMPDIR    "/scratch/$USER/.apptainer/tmp"
+setenv APPTAINER_CACHEDIR  "/scratch/$USER/.apptainer/cache"
+setenv APPTAINER_CONFIGDIR "$HOME/.apptainer"
+```
+After setting up the paths, restart the terminal and build the provided Singularity image:
+```bash
+cd containers/singularity
+singularity build ${image_dir}/image.sif onnx_cuda_root_jana2.def
+ln -s ${image_dir}/image.sif ./image.sif
 ```
 Note this process takes several minutes and raises some harmless warnings. 
 
@@ -34,10 +41,10 @@ The core logic resides in `plugins/RecoClusterVTP`. This plugin performs the fol
 3. Monitoring: Registers and fills histograms.
 
 ### Build and Execution
-Use the provided wrapper scripts. By default, these scripts use the Singularity container. Use the `-l` flag for local builds.
+Use the provided wrapper scripts. By default, these scripts use the docker container. Use the `-s` flag for singularity usage.
 ```
-./build.sh [-l]
-./run.sh [-l]
+./build.sh [-s]
+./run.sh [-s]
 ```
 
 ## Directory strucutre

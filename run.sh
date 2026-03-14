@@ -1,24 +1,32 @@
 #!/bin/bash
 
-set -e
-
 USER=$(whoami)
-WORKDIR=$(pwd)
 
-# modify image pth accordingly
-IMAGE="/lustre24/expphy/volatile/eic/$USER/images/jana2root.sif"
-RUN_LOCAL=false
+DOCKER_CONTAINER="onnx_cuda_root_jana2"
+SINGULARITY_IMAGE="image.sif"
 
-while getopts "l" opt; do
+USE_DOCKER=true
+USE_SINGULARITY=false
+
+# parse options
+while getopts "s" opt; do
   case $opt in
-    l)
-      RUN_LOCAL=true
-      ;;
+    s)
+        if [ ! -f "$SINGULARITY_IMAGE" ]; then
+            echo "Singularity image not found at $SINGULARITY_IMAGE. Abort."
+            exit 1
+        else
+            USE_SINGULARITY=true
+            USE_DOCKER=false
+        fi
+        ;;
   esac
 done
 
 # Sample run script for RecoClusterVTP plugin. Adjust the parameters as needed.
-INPUT="/lustre24/expphy/volatile/hallc/nps/nps-ana/wf_test/ROOTfiles/nps_hms_coin_4599_0_1_-1.root"
+DATA_DIR="/lustre24/expphy/volatile/hallc/nps/nps-ana/wf_test/ROOTfiles"
+INPUT="${DATA_DIR}/nps_hms_coin_4599_0_1_-1.root"
+
 JANA_CMD="jana \
     -Pplugins=RecoClusterVTP \
     -Pvtp_config_file=database/jlog/nps_run_4599_vtp_config.csv \
@@ -28,25 +36,26 @@ JANA_CMD="jana \
     -Pjana:plugin_path=./build/plugins/RecoClusterVTP \
     ${INPUT}"
     
-if [ "$RUN_LOCAL" = true ]; then
-    echo "Running locally..."
-    $JANA_CMD
+
+
+if [ "$USE_DOCKER" = true ]; then
+    podman run \
+        --userns=keep-id \
+        --security-opt label=disable \
+        -v $(pwd):/workspace \
+        -v ${DATA_DIR}:${DATA_DIR} \
+        -w /workspace \
+        $DOCKER_CONTAINER \
+        bash -lc "$JANA_CMD"
 
 else
 
-    if [ ! -f "$IMAGE" ]; then
-        echo "Image not found at $IMAGE. Abort."
-        exit 1
-    fi
-
-    echo "Using Singularity image at $IMAGE"
     singularity exec \
-        --bind ${WORKDIR} \
-        --bind /lustre24 \
-        $IMAGE \
-        bash -c "
-        ${JANA_CMD}
-        "   
+        --bind $(pwd) \
+        --bind ${DATA_DIR} \
+        $SINGULARITY_IMAGE \
+        bash -c "$JANA_CMD"
+
 fi
 
 
