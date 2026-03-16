@@ -10,6 +10,7 @@ namespace nps {
 class Cluster {
 public:
 	Cluster() = default;
+	Cluster(int index) : m_index(index) {}
 	~Cluster() = default;
 
 	// copy constructor
@@ -28,12 +29,14 @@ public:
 		other.m_index = -1; // Invalidate the moved-from object
 	}
 
+	void setIndex(int index) { m_index = index; }
 	void addHit(int channel, double energy, int time) {
 		m_channels.push_back(channel);
 		m_energies.push_back(energy);
 		m_times.push_back(time);
 	}
 
+	int getIndex() const { return m_index; }
 	const std::vector<int> &getChannels() const { return m_channels; }
 	const std::vector<double> &getEnergies() const { return m_energies; }
 	const std::vector<int> &getTimes() const { return m_times; }
