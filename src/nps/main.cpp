@@ -6,6 +6,7 @@
 
 #include "CLI/CLI.hpp"
 
+#include "calibration/VtpService.hpp"
 #include "calibration/fAdc250Service.hpp"
 #include "clustering/VtpClusterFactory.hpp"
 #include "geometry/NpsGeometryService.hpp"
@@ -104,12 +105,13 @@ int main(int argc, char *argv[]) {
 
 	app.ProvideService(std::make_shared<nps::geo::NpsGeometryService>());
 	app.ProvideService(std::make_shared<nps::calib::fAdc250Service>());
+	app.ProvideService(std::make_shared<nps::calib::VtpService>());
 
 	auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
 	vtpClusterGenerator->AddWiring(
 		"VtpClusterFactory",	 // tag
 		{"RawHits", "VtpSeeds"}, // inputs
-		{"Clusters"}			 // outputs
+		{"VtpClusters"}			 // outputs
 	);
 	app.Add(vtpClusterGenerator);
 
