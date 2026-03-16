@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "geometry/NpsGeometryService.hpp"
 #include "nps/RawHit.hpp"
 #include "nps/VtpSeed.hpp"
 
@@ -204,6 +205,10 @@ struct npsBranches {
 };
 
 void setBranchAddresses(TChain *chain, npsBranches &buffer);
+int unpackWaveform(
+	int NSampWaveForm, int max_blocks, std::span<const double> SampWaveForm, std::vector<int> &blocks,
+	std::vector<std::vector<double>> &signals
+);
 
 class ReplaySource : public JEventSource {
 
@@ -218,6 +223,8 @@ class ReplaySource : public JEventSource {
 	Parameter<int> m_run_number{
 		this, "replay_source:run_number", 0, "Run number to assign to events from the source. Default is 0."
 	};
+
+	Service<nps::geo::NpsGeometryService> m_nps_geometry_service{this};
 
 public:
 	ReplaySource();
@@ -235,10 +242,6 @@ public:
 	static std::string GetDescription();
 };
 
-int unpackWaveform(
-	int NSampWaveForm, int max_blocks, std::span<const double> SampWaveForm, std::vector<int> &blocks,
-	std::vector<std::vector<double>> &signals
-);
 } // namespace nps::io
 
 template <> double JEventSourceGeneratorT<nps::io::ReplaySource>::CheckOpenable(std::string resource_name);

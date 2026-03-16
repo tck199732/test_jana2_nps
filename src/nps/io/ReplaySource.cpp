@@ -10,13 +10,10 @@ ReplaySource::ReplaySource() : JEventSource() {
 void ReplaySource::Init() {}
 
 void ReplaySource::Open() {
-	JApplication *app = GetApplication();
 	std::string resource_name = GetResourceName();
 	m_chain = std::make_unique<TChain>(m_tree().c_str());
 	m_chain->Add(resource_name.c_str());
-	std::cout << "Opened file: " << resource_name << " with " << m_chain->GetEntries() << " entries." << std::endl;
 	setBranchAddresses(m_chain.get(), m_buffer);
-	std::cout << "Branch addresses set successfully." << std::endl;
 }
 
 void ReplaySource::Close() { m_chain->Reset(); }
@@ -27,8 +24,6 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 	if (current_event_number >= m_chain->GetEntries() || current_event_number >= m_max_events()) {
 		return Result::FailureFinished;
 	}
-
-	std::cout << "Emitting event " << current_event_number << std::endl;
 
 	event.SetEventNumber(current_event_number++);
 	event.SetRunNumber(m_run_number());
@@ -45,30 +40,19 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 	);
 
 	for (size_t i = 0; i < blocks.size(); i++) {
-		auto hit = new nps::RawHit();
-		hit->setChannel(blocks[i]);
-		hit->setWaveform(signals[i]);
+		auto hit = new nps::RawHit(blocks[i], std::move(signals[i]));
 		hits.push_back(hit);
 	}
 
 	for (int iclus = 0; iclus < m_buffer.Ndata_NPS_cal_vtpClusX; iclus++) {
 		auto col = m_buffer.NPS_cal_vtpClusX[iclus];
 		auto row = m_buffer.NPS_cal_vtpClusY[iclus];
+		auto ch = m_nps_geometry_service().getBlockFromColRow(col, row);
 		auto e = m_buffer.NPS_cal_vtpClusE[iclus];
 		auto t = m_buffer.NPS_cal_vtpClusTime[iclus];
 		auto size = m_buffer.NPS_cal_vtpClusSize[iclus];
 
-		assert(size > 0); // if size is 0, then there is no cluster, so we should skip this entry
-		assert(m_buffer.NPS_cal_vtpClusX.size() == m_buffer.NPS_cal_vtpClusY.size());
-		assert(m_buffer.NPS_cal_vtpClusX.size() == m_buffer.NPS_cal_vtpClusE.size());
-		assert(m_buffer.NPS_cal_vtpClusX.size() == m_buffer.NPS_cal_vtpClusTime.size());
-		assert(m_buffer.NPS_cal_vtpClusX.size() == m_buffer.NPS_cal_vtpClusSize.size());
-
-		auto seed = new nps::VtpSeed();
-		seed->setChannel(col);
-		seed->setSize(size);
-		seed->setEnergy(e);
-		seed->setTime(t);
+		auto seed = new nps::VtpSeed(ch, size, t, e);
 		seeds.push_back(seed);
 	}
 
@@ -290,7 +274,6 @@ void setBranchAddresses(TChain *chain, npsBranches &buffer) {
 	chain->SetBranchAddress("NPS.cal.fly.totNumGoodAdcHits", &buffer.NPS_cal_fly_totNumGoodAdcHits);
 	chain->SetBranchAddress("NPS.cal.nclust", &buffer.NPS_cal_nclust);
 	chain->SetBranchAddress("NPS.cal.nhits", &buffer.NPS_cal_nhits);
-
 }
 
 } // namespace nps::io
