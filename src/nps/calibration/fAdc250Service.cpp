@@ -62,6 +62,9 @@ bool fAdc250Service::Load(const std::string &filename) {
 		m_config.ped[channel] = FADC250_ALLCH_PED;
 	}
 
+	m_config.clock_cycles = m_clock_cycles();
+	m_config.time_interval = m_time_interval();
+
 	config_file.close();
 	return true;
 }

@@ -18,6 +18,9 @@
 namespace nps::calib {
 
 struct fadc250_cfg {
+
+	int clock_cycles;	  // number of clock cycles to wait after a pulse is detected before looking for another pulse
+	double time_interval; // time interval of each FADC sample in ns
 	std::unordered_map<int, double> thr;  // FADC250_TET per channel
 	std::unordered_map<int, double> gain; // FADC250_GAIN per channel
 	std::unordered_map<int, double> ped;  // FADC250_ALLCH_PED per channel
@@ -36,8 +39,6 @@ public:
 	void Reset();
 
 	const fadc250_cfg &getConfig() const { return m_config; }
-	double getTimeInterval() const { return m_time_interval; }
-	int getClockCycles() const { return m_clock_cycles; }
 
 private:
 	Parameter<std::string> m_config_file{
