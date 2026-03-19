@@ -23,34 +23,63 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(CLI11)
 
+FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG        12.1.0
+)
+FetchContent_MakeAvailable(fmt)
+
+
+FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG        12.1.0
+)
+FetchContent_MakeAvailable(fmt)
+
+
 # --------- CREATE TDIS EXECUTABLE ----------------
 add_executable(nps_onnx_app
         main.cpp
         io/ReplaySource.cpp
+        # io/NpzSource.cpp
         geometry/NpsGeometryService.cpp
         clustering/VtpClusterFactory.cpp
+        clustering/AiVtpClusterFactory.cpp
         calibration/fAdc250Service.cpp
         calibration/VtpService.cpp
+        onnx/OnnxRuntimeService.cpp
 )
 
 # ---------- FIND REQUIRED PACKAGES -------------
 find_package(JANA REQUIRED)
 find_package(ROOT COMPONENTS Core RIO Hist Graf Gpad Geom Tree Postscript Matrix Physics MathCore)
+
+find_path(ONNX_RUNTIME_SESSION_INCLUDE_DIRS onnxruntime_cxx_api.h HINTS /usr/local/include/onnxruntime/)
+find_library(ONNX_RUNTIME_LIB onnxruntime HINTS /usr/local/lib)
+
 # Get all variables
 GET_CMAKE_PROPERTY(vars VARIABLES)
-
 
 target_include_directories(nps_onnx_app PUBLIC ${CMAKE_CURRENT_LIST_DIR} "${CMAKE_CURRENT_LIST_DIR}/..")
 target_link_libraries(nps_onnx_app
     ${JANA_LIB}
     stdc++fs
     ${ROOT_LIBRARIES}
+    ${ONNX_RUNTIME_LIB}
     CLI11::CLI11
+    fmt::fmt
 )
 
 set_target_properties(nps_onnx_app PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
-target_include_directories(nps_onnx_app SYSTEM PUBLIC ${JANA_INCLUDE_DIR} ${ROOT_INCLUDE_DIRS})
-target_include_directories(nps_onnx_app PUBLIC ${CMAKE_CURRENT_LIST_DIR} "${CMAKE_CURRENT_LIST_DIR}/..")
+target_include_directories(
+    nps_onnx_app 
+    SYSTEM PUBLIC 
+    ${JANA_INCLUDE_DIR} 
+    ${ROOT_INCLUDE_DIRS}
+    ${ONNX_RUNTIME_SESSION_INCLUDE_DIRS}
+)
 
 # ----------- install destination -------------------
 install(TARGETS nps_onnx_app DESTINATION bin)
