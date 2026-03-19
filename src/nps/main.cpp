@@ -8,8 +8,12 @@
 
 #include "calibration/VtpService.hpp"
 #include "calibration/fAdc250Service.hpp"
-#include "clustering/VtpClusterFactory.hpp"
 #include "geometry/NpsGeometryService.hpp"
+#include "onnx/OnnxRuntimeService.hpp"
+
+#include "clustering/AiVtpClusterFactory.hpp"
+#include "clustering/VtpClusterFactory.hpp"
+
 #include "io/CsvWriterProcessor.hpp"
 #include "io/ReplaySource.hpp"
 
@@ -106,7 +110,9 @@ int main(int argc, char *argv[]) {
 	app.ProvideService(std::make_shared<nps::geo::NpsGeometryService>());
 	app.ProvideService(std::make_shared<nps::calib::fAdc250Service>());
 	app.ProvideService(std::make_shared<nps::calib::VtpService>());
+	app.ProvideService(std::make_shared<onnx::OnnxRuntimeService>());
 
+	// create fpga reco cluster factory and add it to the app
 	auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
 	vtpClusterGenerator->AddWiring(
 		"VtpClusterFactory",	 // tag
@@ -114,6 +120,15 @@ int main(int argc, char *argv[]) {
 		{"VtpClusters"}			 // outputs
 	);
 	app.Add(vtpClusterGenerator);
+
+	// create the ai reco cluster factory and add it to the app
+	auto aiVtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::AiVtpClusterFactory>();
+	aiVtpClusterGenerator->AddWiring(
+		"AiVtpClusterFactory", // tag
+		{"RawHits"},		   // inputs
+		{"RecoClusters"}	   // outputs
+	);
+	app.Add(aiVtpClusterGenerator);
 
 	app.Add(new JEventSourceGeneratorT<nps::io::ReplaySource>);
 	app.Add(new nps::io::CsvWriterProcessor());

@@ -18,7 +18,8 @@ namespace nps::io {
 class CsvWriterProcessor : public JEventProcessor {
 
 	// Later add Clusters reconstructed from AI/ML algorithms
-	Input<nps::Cluster> m_in_clusters{this, {"VtpClusters"}};
+	Input<nps::Cluster> m_vtp_clusters{this, {"VtpClusters"}};
+	Input<nps::Cluster> m_reco_clusters{this, {"RecoClusters"}};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 
@@ -72,7 +73,7 @@ public:
 
 	void ProcessSequential(const JEvent &event) override {
 		uint64_t eventNumber = event.GetEventNumber();
-		for (auto clus : m_in_clusters()) {
+		for (auto clus : m_vtp_clusters()) {
 			WriteClusterEntry(eventNumber, clus);
 		}
 	}
