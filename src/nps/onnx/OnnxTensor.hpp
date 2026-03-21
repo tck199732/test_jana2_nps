@@ -118,7 +118,7 @@ public:
 	void *data() { return static_cast<void *>(m_data.get()); }
 	const void *data() const { return static_cast<const void *>(m_data.get()); }
 
-	const std::string &name() const { return m_name; }
+	const char *name() const { return m_name.c_str(); }
 	const std::vector<int64_t> &dims() const { return m_dims; }
 	ONNXTensorElementDataType type() const { return m_type; }
 	size_t byte_size() const { return m_byte_size; }
