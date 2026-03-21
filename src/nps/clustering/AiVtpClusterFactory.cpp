@@ -8,42 +8,44 @@ void AiVtpClusterFactory::ChangeRun(int32_t run_number) {}
 
 void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
+	if (m_rawhits().empty()) {
+		return;
+	}
+
 	auto options = m_service_onnx().createSessionOptions(m_num_threads(), m_use_cuda());
 	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), options);
-	PrepareTensors(session);
+	if (!PrepareTensors(session)) {
+		return;
+	}
 
-	// pack tensor data into Ort::Value
-	std::vector<Ort::Value> inputTensors;
-	std::vector<Ort::Value> outputTensors;
+	std::vector<Ort::Value> input_tensors;
+	std::vector<Ort::Value> output_tensors;
+	std::vector<const char *> input_names;
+	std::vector<const char *> output_names;
 
-	Ort::MemoryInfo memoryInfo =
-		Ort::MemoryInfo::CreateCpu(OrtAllocatorType::OrtArenaAllocator, OrtMemType::OrtMemTypeDefault);
+	input_tensors.reserve(m_input_tensors.size());
+	output_tensors.reserve(m_output_tensors.size());
+	input_names.reserve(m_input_tensors.size());
+	output_names.reserve(m_output_tensors.size());
 
 	for (auto &tensor : m_input_tensors) {
-		inputTensors.push_back(tensor.GetOrtValue());
+		input_tensors.push_back(tensor.GetOrtValue());
+		input_names.push_back(tensor.name());
 	}
 
 	for (auto &tensor : m_output_tensors) {
-		outputTensors.push_back(tensor.GetOrtValue());
-	}
-
-	std::vector<const char *> input_names;
-	for (const auto &tensor : m_input_tensors) {
-		input_names.push_back(tensor.name().c_str());
-	}
-	std::vector<const char *> output_names;
-	for (const auto &tensor : m_output_tensors) {
-		output_names.push_back(tensor.name().c_str());
+		output_tensors.push_back(tensor.GetOrtValue());
+		output_names.push_back(tensor.name());
 	}
 
 	try {
 		session.Run(
-			Ort::RunOptions{nullptr}, input_names.data(), inputTensors.data(), m_input_tensors.size(),
-			output_names.data(), outputTensors.data(), m_output_tensors.size()
+			Ort::RunOptions{nullptr}, input_names.data(), input_tensors.data(), m_input_tensors.size(),
+			output_names.data(), output_tensors.data(), m_output_tensors.size()
 		);
+
 	} catch (const Ort::Exception &e) {
-		std::cerr << "ONNX Runtime inference failed: " << e.what() << std::endl;
-		return;
+		throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
 	}
 }
 
@@ -69,8 +71,9 @@ void AiVtpClusterFactory::PrepareTensorValues() {
 	const auto &hits = m_rawhits();
 	const size_t n_hits = hits.size();
 
-	if (n_hits == 0)
+	if (n_hits == 0) {
 		return;
+	}
 
 	// Fill x (waveforms)
 	size_t offset = 0;
@@ -102,31 +105,49 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 	const size_t numInputNodes = session.GetInputCount();
 	const size_t numOutputNodes = session.GetOutputCount();
 
-	auto resolve_shape = [&](std::vector<int64_t> &shape) -> std::vector<int64_t> {
-		if (shape.size() > 0 && shape[0] == -1)
-			shape[0] = batchSize;
-		if (shape.size() > 1 && shape[1] == -1)
-			shape[1] = numHits;
-		return shape;
-	};
-
 	for (size_t i = 0; i < numInputNodes; ++i) {
-		auto info = session.GetInputTypeInfo(i).GetTensorTypeAndShapeInfo();
-		m_input_tensors.push_back(
-			onnx::Tensor::allocate(
-				session.GetInputNameAllocated(i, allocator).get(), resolve_shape(info.GetShape()), info.GetElementType()
-			)
-		);
+		Ort::AllocatedStringPtr name = session.GetInputNameAllocated(i, allocator);
+		Ort::TypeInfo type_info = session.GetInputTypeInfo(i);
+		auto info = type_info.GetTensorTypeAndShapeInfo();
+		auto shape = info.GetShape();
+		auto type = info.GetElementType();
+
+		if (shape.size() > 0 && shape[0] == -1) {
+			shape.at(0) = batchSize;
+		}
+		if (shape.size() > 1 && shape[1] == -1) {
+			shape.at(1) = numHits;
+		}
+
+		for (const auto &dim : shape) {
+			if (dim <= 0) {
+				throw std::runtime_error("Invalid tensor shape dimension: " + std::to_string(dim));
+			}
+		}
+		m_input_tensors.push_back(onnx::Tensor::allocate(name.get(), shape, type));
 	}
 
 	for (size_t i = 0; i < numOutputNodes; ++i) {
-		auto info = session.GetOutputTypeInfo(i).GetTensorTypeAndShapeInfo();
-		m_output_tensors.push_back(
-			onnx::Tensor::allocate(
-				session.GetOutputNameAllocated(i, allocator).get(), resolve_shape(info.GetShape()),
-				info.GetElementType()
-			)
-		);
+		Ort::AllocatedStringPtr name = session.GetOutputNameAllocated(i, allocator);
+
+		Ort::TypeInfo type_info = session.GetOutputTypeInfo(i);
+		auto info = type_info.GetTensorTypeAndShapeInfo();
+		auto shape = info.GetShape();
+		auto type = info.GetElementType();
+
+		if (shape.size() > 0 && shape[0] == -1) {
+			shape.at(0) = batchSize;
+		}
+		if (shape.size() > 1 && shape[1] == -1) {
+			shape.at(1) = numHits;
+		}
+
+		for (const auto &dim : shape) {
+			if (dim <= 0) {
+				throw std::runtime_error("Invalid tensor shape dimension: " + std::to_string(dim));
+			}
+		}
+		m_output_tensors.push_back(onnx::Tensor::allocate(name.get(), shape, type));
 	}
 }
 
