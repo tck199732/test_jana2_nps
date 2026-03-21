@@ -15,6 +15,7 @@
 #include "clustering/VtpClusterFactory.hpp"
 
 #include "io/CsvWriterProcessor.hpp"
+#include "io/RandomSource.hpp"
 #include "io/ReplaySource.hpp"
 
 struct ProgramArguments {
@@ -130,7 +131,8 @@ int main(int argc, char *argv[]) {
 	);
 	app.Add(aiVtpClusterGenerator);
 
-	app.Add(new JEventSourceGeneratorT<nps::io::ReplaySource>);
+	// app.Add(new JEventSourceGeneratorT<nps::io::ReplaySource>);
+	app.Add(new JEventSourceGeneratorT<nps::io::RandomSource>);
 	app.Add(new nps::io::CsvWriterProcessor());
 
 	if (parsedArgs.filePaths.empty()) {

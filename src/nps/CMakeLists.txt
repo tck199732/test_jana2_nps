@@ -43,7 +43,7 @@ FetchContent_MakeAvailable(fmt)
 add_executable(nps_onnx_app
         main.cpp
         io/ReplaySource.cpp
-        # io/NpzSource.cpp
+        io/RandomSource.cpp
         geometry/NpsGeometryService.cpp
         clustering/VtpClusterFactory.cpp
         clustering/AiVtpClusterFactory.cpp
