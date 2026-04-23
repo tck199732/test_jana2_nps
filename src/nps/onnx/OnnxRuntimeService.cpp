@@ -1,4 +1,6 @@
 #include "OnnxRuntimeService.hpp"
+#include <algorithm>
+#include <iostream>
 
 namespace onnx {
 
@@ -8,8 +10,19 @@ void OnnxRuntimeService::Init() {
 
 Ort::SessionOptions OnnxRuntimeService::createSessionOptions(int num_threads, bool use_cuda) const {
 	Ort::SessionOptions session_options;
+	session_options.SetLogSeverityLevel(0);
 	session_options.SetIntraOpNumThreads(num_threads);
 	if (use_cuda) {
+		const auto available_providers = Ort::GetAvailableProviders();
+		const auto cuda_provider =
+			std::find(available_providers.begin(), available_providers.end(), "CUDAExecutionProvider");
+		if (cuda_provider == available_providers.end()) {
+			std::string msg = "CUDAExecutionProvider is not available. Available providers are: ";
+			for (const auto &provider : available_providers) {
+				msg += provider + " ";
+			}
+			throw std::runtime_error(msg);
+		}
 		// Using CUDA backend
 		// https://github.com/microsoft/onnxruntime/blob/v1.8.2/include/onnxruntime/core/session/onnxruntime_cxx_api.h#L329
 		OrtCUDAProviderOptions cuda_options{};
@@ -20,8 +33,9 @@ Ort::SessionOptions OnnxRuntimeService::createSessionOptions(int num_threads, bo
 	return session_options;
 }
 
-Ort::Session &OnnxRuntimeService::createSession(const std::string &session_name, const std::string &model_filepath) {
-	auto options = createSessionOptions(/*num_threads=*/1, /*use_cuda=*/false);
+Ort::Session &
+OnnxRuntimeService::createSession(const std::string &session_name, const std::string &model_filepath, bool use_cuda) {
+	Ort::SessionOptions options = createSessionOptions(1, use_cuda);
 	return createSession(session_name, model_filepath, options);
 }
 

@@ -19,7 +19,7 @@ public:
 	~OnnxRuntimeService() override = default;
 
 	void Init() override;
-	Ort::Session &createSession(const std::string &session_name, const std::string &model_filepath);
+	Ort::Session &createSession(const std::string &session_name, const std::string &model_filepath, bool use_cuda);
 	Ort::Session &createSession(
 		const std::string &session_name, const std::string &model_filepath, const Ort::SessionOptions &session_options
 	);
