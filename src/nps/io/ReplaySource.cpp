@@ -21,7 +21,7 @@ void ReplaySource::Close() { m_chain->Reset(); }
 JEventSource::Result ReplaySource::Emit(JEvent &event) {
 
 	static size_t current_event_number = 0;
-	if (current_event_number >= m_chain->GetEntries() || current_event_number >= m_max_events()) {
+	if (current_event_number >= m_chain->GetEntries()) {
 		return Result::FailureFinished;
 	}
 

@@ -216,10 +216,6 @@ class ReplaySource : public JEventSource {
 	npsBranches m_buffer;
 
 	Parameter<std::string> m_tree{this, "replay_source:tree", "T", "Tree name to read from for ReplaySource"};
-	Parameter<int> m_max_events{
-		this, "replay_source:max_events", INT_MAX,
-		"Maximum number of events to emit from the source. Default is INT_MAX."
-	};
 	Parameter<int> m_run_number{
 		this, "replay_source:run_number", 0, "Run number to assign to events from the source. Default is 0."
 	};
