@@ -49,9 +49,9 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 			if (match) {
 				usedRecoIndices.insert(i_reco);
 				usedVtpIndices.insert(i_seed);
-				// output_clusters.push_back(std::move(reco_clusters[i_reco]));
-
-				m_clusters().push_back(new nps::Cluster(std::move(reco_clusters[i_reco])));
+				auto matchedCluster = new nps::Cluster(std::move(reco_clusters[i_reco]));
+				matchedCluster->setClusterIndex(i_reco);
+				m_clusters().push_back(matchedCluster);
 				break;
 			}
 		}
