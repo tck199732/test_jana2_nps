@@ -1,5 +1,9 @@
 #include "RandomSource.hpp"
 
+#include <algorithm>
+#include <chrono>
+#include <thread>
+
 namespace nps::io {
 
 RandomSource::RandomSource() : JEventSource() {
@@ -19,6 +23,21 @@ void RandomSource::Open() { std::string resource_name = GetResourceName(); }
 void RandomSource::Close() {}
 
 JEventSource::Result RandomSource::Emit(JEvent &event) {
+	if (m_max_emit_freq_hz() > 0.0f) {
+		auto now = std::chrono::steady_clock::now();
+		if (m_next_emit_time == std::chrono::steady_clock::time_point{}) {
+			m_next_emit_time = now;
+		}
+
+		if (now < m_next_emit_time) {
+			std::this_thread::sleep_until(m_next_emit_time);
+		}
+
+		const auto period = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+			std::chrono::duration<double>(1.0 / static_cast<double>(m_max_emit_freq_hz()))
+		);
+		m_next_emit_time = std::max(m_next_emit_time + period, std::chrono::steady_clock::now());
+	}
 
 	static size_t current_event_number = 0;
 	event.SetEventNumber(current_event_number++);

@@ -5,6 +5,7 @@
 #include <JANA/JEventSource.h>
 #include <JANA/JEventSourceGeneratorT.h>
 
+#include <chrono>
 #include <iostream>
 #include <random>
 #include <string>
@@ -65,6 +66,13 @@ class RandomSource : public JEventSource {
 	Parameter<int> m_run_number{
 		this, "random_source:run_number", 0, "Run number to assign to events from the source. Default is 0."
 	};
+
+	Parameter<float> m_max_emit_freq_hz{
+		this, "random_source:max_emit_freq_hz", 100.0,
+		"Maximum emit frequency for generated events in Hz. Default is 100."
+	};
+
+	std::chrono::steady_clock::time_point m_next_emit_time{};
 
 public:
 	RandomSource();
