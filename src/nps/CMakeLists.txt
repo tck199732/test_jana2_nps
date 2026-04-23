@@ -32,11 +32,11 @@ FetchContent_MakeAvailable(fmt)
 
 
 FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        GIT_TAG        12.1.0
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG        v1.15.3
 )
-FetchContent_MakeAvailable(fmt)
+FetchContent_MakeAvailable(spdlog)
 
 
 # --------- CREATE TDIS EXECUTABLE ----------------
@@ -56,6 +56,7 @@ add_executable(nps_onnx_app
 find_package(JANA REQUIRED)
 find_package(ROOT COMPONENTS Core RIO Hist Graf Gpad Geom Tree Postscript Matrix Physics MathCore)
 
+
 find_path(ONNX_RUNTIME_SESSION_INCLUDE_DIRS onnxruntime_cxx_api.h HINTS /usr/local/include/onnxruntime/)
 find_library(ONNX_RUNTIME_LIB onnxruntime HINTS /usr/local/lib)
 
@@ -70,6 +71,7 @@ target_link_libraries(nps_onnx_app
     ${ONNX_RUNTIME_LIB}
     CLI11::CLI11
     fmt::fmt
+    spdlog::spdlog
 )
 
 set_target_properties(nps_onnx_app PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
