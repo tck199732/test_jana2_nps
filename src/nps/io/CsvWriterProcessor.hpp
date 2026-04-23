@@ -17,16 +17,20 @@
 namespace nps::io {
 class CsvWriterProcessor : public JEventProcessor {
 
-	// Later add Clusters reconstructed from AI/ML algorithms
-	Input<nps::Cluster> m_vtp_clusters{this, {"VtpClusters"}};
+	// Input<nps::Cluster> m_vtp_clusters{this, {"VtpClusters"}};
 	Input<nps::Cluster> m_reco_clusters{this, {"RecoClusters"}};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 
 private:
-	std::string m_cfg_filePrefix;
-	std::ofstream m_vtp_clusterFile;
-	std::string m_vtp_clusterFileName;
+	Parameter<std::string> m_cfg_filePrefix{
+		this, "nps:output_prefix", "nps_output", "Output prefix for created files (no extension, alias to -o,--output)"
+	};
+
+	// std::ofstream m_vtp_clusterFile;
+	// std::string m_vtp_clusterFileName;
+	std::ofstream m_reco_clusterFile;
+	std::string m_reco_clusterFileName;
 
 public:
 	CsvWriterProcessor() {
@@ -35,22 +39,23 @@ public:
 	}
 
 	void Init() override {
+		// m_vtp_clusterFileName = m_cfg_filePrefix() + ".clusters.csv";
+		// m_vtp_clusterFile.open(m_vtp_clusterFileName);
+		// if (!m_vtp_clusterFile.is_open()) {
+		// 	throw JException("Failed to open VTP cluster output file: %s", m_vtp_clusterFileName.c_str());
+		// }
 
-		m_cfg_filePrefix = GetApplication()->GetParameterValue<std::string>("nps:output");
-
-		// Construct file names
-		m_vtp_clusterFileName = m_cfg_filePrefix + ".clusters.csv";
-
-		// Open files
-		m_vtp_clusterFile.open(m_vtp_clusterFileName);
-
-		if (!m_vtp_clusterFile.is_open()) {
-			throw JException("Failed to open VTP cluster output file: %s", m_vtp_clusterFileName.c_str());
+		m_reco_clusterFileName = m_cfg_filePrefix() + ".reco_clusters.csv";
+		m_reco_clusterFile.open(m_reco_clusterFileName);
+		if (!m_reco_clusterFile.is_open()) {
+			throw JException("Failed to open Reco cluster output file: %s", m_reco_clusterFileName.c_str());
 		}
-		writeVtpClusterHeader();
+
+		writeClusterHeader(m_reco_clusterFile);
+		// writeClusterHeader(m_vtp_clusterFile);
 	}
 
-	void writeVtpClusterHeader() {
+	void writeClusterHeader(std::ofstream &file) {
 		std::vector<std::string> fields = {
 			"event_id",	  // event number
 			"cluster_id", // cluster identifier
@@ -63,23 +68,29 @@ public:
 		};
 
 		for (size_t i = 0; i < fields.size(); ++i) {
-			m_vtp_clusterFile << fields[i];
+			file << fields[i];
 			if (i < fields.size() - 1) {
-				m_vtp_clusterFile << ",";
+				file << ",";
 			}
 		}
-		m_vtp_clusterFile << "\n";
+		file << "\n";
 	}
 
 	void ProcessSequential(const JEvent &event) override {
 		uint64_t eventNumber = event.GetEventNumber();
-		for (auto clus : m_vtp_clusters()) {
-			WriteClusterEntry(eventNumber, clus);
+		for (auto clus : m_reco_clusters()) {
+			WriteClusterEntry(m_reco_clusterFile, eventNumber, clus, true);
 		}
+
+		// for (auto clus : m_vtp_clusters()) {
+		// 	WriteClusterEntry(m_vtp_clusterFile, eventNumber, clus, false);
+		// }
 	}
 
-	void WriteClusterEntry(uint64_t eventIndex, const nps::Cluster *clus) {
-		auto clus_id = clus->getIndex();
+	void WriteClusterEntry(std::ofstream &file, uint64_t eventIndex, const nps::Cluster *clus, bool useClusEvent) {
+
+		auto evt_id = useClusEvent ? clus->getEventIndex() + eventIndex : eventIndex;
+		auto clus_id = clus->getClusterIndex();
 		auto channels = clus->getChannels();
 		auto energies = clus->getEnergies();
 		auto times = clus->getTimes();
@@ -90,14 +101,17 @@ public:
 			auto e = energies[hit_id];
 			auto [col, row] = m_service_geometry().getColRowFromBlock(ch);
 
-			m_vtp_clusterFile << eventIndex << "," << clus_id << "," << hit_id << "," << ch << "," << row << "," << col
-							  << "," << e << "," << t << "\n";
+			file << evt_id << "," << clus_id << "," << hit_id << "," << ch << "," << row << "," << col << "," << e
+				 << "," << t << "\n";
 		}
 	}
 
 	void Finish() override {
-		if (m_vtp_clusterFile.is_open()) {
-			m_vtp_clusterFile.close();
+		// if (m_vtp_clusterFile.is_open()) {
+		// 	m_vtp_clusterFile.close();
+		// }
+		if (m_reco_clusterFile.is_open()) {
+			m_reco_clusterFile.close();
 		}
 	}
 };
