@@ -12,10 +12,17 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 		return;
 	}
 
-	auto options = m_service_onnx().createSessionOptions(m_num_threads(), m_use_cuda());
-	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), options);
-	if (!PrepareTensors(session)) {
+	DeepCopyRawHits(m_rawhits());
+
+	if (m_rawhit_queue.size() < static_cast<size_t>(m_batch_size())) {
 		return;
+	}
+
+	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), m_use_cuda());
+	try {
+		PrepareTensors(session);
+	} catch (const std::exception &e) {
+		throw std::runtime_error("Failed to prepare tensors for ONNX Runtime session: " + std::string(e.what()));
 	}
 
 	std::vector<Ort::Value> input_tensors;
@@ -47,61 +54,108 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	} catch (const Ort::Exception &e) {
 		throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
 	}
+
+	// inference here
+
+	m_rawhit_queue.clear();
 }
 
-bool AiVtpClusterFactory::PrepareTensors(Ort::Session &session) {
+void AiVtpClusterFactory::PrepareTensors(Ort::Session &session) {
 	m_input_tensors.clear();
 	m_output_tensors.clear();
 
 	try {
 		PrepareTensorInfo(session);
 	} catch (const std::exception &e) {
-		return false;
+		throw std::runtime_error("Failed to prepare tensor info for ONNX Runtime session: " + std::string(e.what()));
 	}
 
 	try {
 		PrepareTensorValues();
 	} catch (const std::exception &e) {
-		return false;
+		throw std::runtime_error("Failed to prepare tensor values for ONNX Runtime session: " + std::string(e.what()));
 	}
-	return true;
 }
 
 void AiVtpClusterFactory::PrepareTensorValues() {
-	const auto &hits = m_rawhits();
-	const size_t n_hits = hits.size();
 
-	if (n_hits == 0) {
-		return;
+	if (m_rawhit_queue.empty()) {
+		throw std::runtime_error("Raw-hit queue is empty while preparing tensor values.");
+	}
+	if (m_input_tensors.size() < 4) {
+		throw std::runtime_error("Expected at least 4 input tensors (x, pos, fea_mask, node_mask).");
+	}
+	const size_t batch = m_rawhit_queue.size();
+	const size_t hits_per_event = m_rawhit_queue.front().size();
+
+	if (batch == 0 || hits_per_event == 0) {
+		throw std::runtime_error("Invalid batch/hit dimensions while preparing tensor values.");
 	}
 
-	// Fill x (waveforms)
-	size_t offset = 0;
-	for (size_t i = 0; i < n_hits; ++i) {
-		const auto &waveform = hits[i]->getWaveform();
-		m_input_tensors[0].fill_n(waveform.data(), offset, waveform.size());
-		offset += waveform.size();
+	if (m_input_tensors[0].n_elements() % batch != 0) {
+		throw std::runtime_error("Input tensor x elements are not divisible by batch size.");
+	}
+	if (m_input_tensors[1].n_elements() % batch != 0) {
+		throw std::runtime_error("Input tensor pos elements are not divisible by batch size.");
 	}
 
-	// Fill pos (col, row per hit)
-	for (size_t i = 0; i < n_hits; ++i) {
-		auto [col, row] = m_service_geometry().getColRowFromBlock(hits[i]->getChannel());
-		const float pos[2] = {static_cast<float>(col), static_cast<float>(row)};
-		m_input_tensors[1].fill_n(pos, i * 2, 2); // 2 elements at offset i*2, no heap alloc
+	const size_t x_event_stride = m_input_tensors[0].n_elements() / batch;
+	const size_t pos_event_stride = m_input_tensors[1].n_elements() / batch;
+	if (x_event_stride % hits_per_event != 0) {
+		throw std::runtime_error("Input tensor x stride is not divisible by hits per event.");
+	}
+	const size_t x_features_per_hit = x_event_stride / hits_per_event;
+
+	if (pos_event_stride < hits_per_event * 2) {
+		throw std::runtime_error("Position tensor is too small for [batch, hits, 2] layout.");
+	}
+
+	for (size_t ev = 0; ev < batch; ++ev) {
+		const auto &ev_hits = m_rawhit_queue[ev];
+		const size_t x_event_base = ev * x_event_stride;
+		const size_t pos_event_base = ev * pos_event_stride;
+
+		// Fill x (waveforms)
+		size_t offset = x_event_base;
+		for (size_t i = 0; i < ev_hits.size(); ++i) {
+			const auto &waveform = ev_hits[i].getWaveform();
+			if (waveform.size() > x_features_per_hit) {
+				throw std::runtime_error(
+					"Waveform length exceeds model feature dimension for tensor x: waveform.size=" +
+					std::to_string(waveform.size()) + ", max_features=" + std::to_string(x_features_per_hit)
+				);
+			}
+			m_input_tensors[0].fill_n(waveform.data(), offset, waveform.size());
+			offset += x_features_per_hit;
+		}
+
+		// Fill pos (col, row per hit)
+		for (size_t i = 0; i < ev_hits.size(); ++i) {
+			auto [col, row] = m_service_geometry().getColRowFromBlock(ev_hits[i].getChannel());
+			const float pos[2] = {static_cast<float>(col), static_cast<float>(row)};
+			const size_t pos_offset = pos_event_base + i * 2;
+			m_input_tensors[1].fill_n(pos, pos_offset, 2); // 2 elements at offset i*2 in this event slice
+		}
 	}
 
 	// Fill masks
-	m_input_tensors[2].fill(true); // all features valid (no padding)
-	m_input_tensors[3].fill(true); // all graph-nodes valid (no downsampling)
+	m_input_tensors[2].fill(true); // all features valid (no padding in inference)
+	m_input_tensors[3].fill(true); // all graph-nodes valid (no downsampling in inference)
 }
 
 void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 
-	const int64_t batchSize = 1;
-	const int64_t numHits = m_rawhits().size();
+	const int64_t numHits = m_rawhit_queue.front().size();
+	if (numHits <= 0) {
+		throw std::runtime_error("Number of hits in an event must be greater than 0.");
+	}
+	for (const auto &ev_hits : m_rawhit_queue) {
+		if (ev_hits.size() != numHits) {
+			throw std::runtime_error("Inconsistent number of hits in events within the batch.");
+		}
+	}
 
 	Ort::AllocatorWithDefaultOptions allocator;
-
 	const size_t numInputNodes = session.GetInputCount();
 	const size_t numOutputNodes = session.GetOutputCount();
 
@@ -113,7 +167,7 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 		auto type = info.GetElementType();
 
 		if (shape.size() > 0 && shape[0] == -1) {
-			shape.at(0) = batchSize;
+			shape.at(0) = m_batch_size();
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
 			shape.at(1) = numHits;
@@ -136,7 +190,7 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 		auto type = info.GetElementType();
 
 		if (shape.size() > 0 && shape[0] == -1) {
-			shape.at(0) = batchSize;
+			shape.at(0) = m_batch_size();
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
 			shape.at(1) = numHits;
@@ -148,6 +202,20 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 			}
 		}
 		m_output_tensors.push_back(onnx::Tensor::allocate(name.get(), shape, type));
+	}
+}
+
+void AiVtpClusterFactory::DeepCopyRawHits(const std::vector<const nps::RawHit *> &rawhits) {
+	std::vector<nps::RawHit> copied_hits;
+	copied_hits.reserve(rawhits.size());
+	for (const auto *hit : rawhits) {
+		if (hit == nullptr) {
+			continue;
+		}
+		copied_hits.push_back(*hit);
+	}
+	if (!copied_hits.empty()) {
+		m_rawhit_queue.push_back(std::move(copied_hits));
 	}
 }
 

@@ -17,6 +17,7 @@
 #include "nps/fAdcHit.hpp"
 
 #include <cassert>
+#include <deque>
 #include <string>
 #include <unordered_set>
 #include <variant>
@@ -40,10 +41,13 @@ public:
 	void Describe() const;
 
 private:
+	std::deque<std::vector<nps::RawHit>> m_rawhit_queue; // for accumulate events
+
 	std::vector<onnx::Tensor> m_input_tensors;
 	std::vector<onnx::Tensor> m_output_tensors;
 
-	bool PrepareTensors(Ort::Session &session);
+	void DeepCopyRawHits(const std::vector<const nps::RawHit *> &rawhits);
+	void PrepareTensors(Ort::Session &session);
 	void PrepareTensorInfo(Ort::Session &session);
 	void PrepareTensorValues();
 
@@ -53,11 +57,13 @@ private:
 	};
 
 	Parameter<std::string> m_session_name{
-		this, "clus:session_name", "vtp_cluster_reco_session",
+		this, "clus:ort_session_name", "vtp_cluster_reco_session",
 		"Name of the ONNX Runtime session to use for cluster reconstruction."
 	};
 
-	Parameter<int> m_num_threads{this, "clus:num_threads", 1, "Number of threads to use for ONNX Runtime inference."};
+	Parameter<int> m_batch_size{
+		this, "clus:batch_size", 1, "Number of events to process in a single batch for ONNX Runtime inference."
+	};
 
 	Parameter<bool> m_use_cuda{this, "clus:use_cuda", false, "Whether to use CUDA for ONNX Runtime inference."};
 };
