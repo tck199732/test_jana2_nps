@@ -13,6 +13,7 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	}
 
 	DeepCopyRawHits(m_rawhits());
+	m_event_index_queue.push_back(event_index);
 
 	if (m_rawhit_queue.size() < static_cast<size_t>(m_batch_size())) {
 		return;
@@ -55,9 +56,10 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 		throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
 	}
 
-	// inference here
+	PopulateOutput();
 
 	m_rawhit_queue.clear();
+	m_event_index_queue.clear();
 }
 
 void AiVtpClusterFactory::PrepareTensors(Ort::Session &session) {
@@ -216,6 +218,43 @@ void AiVtpClusterFactory::DeepCopyRawHits(const std::vector<const nps::RawHit *>
 	}
 	if (!copied_hits.empty()) {
 		m_rawhit_queue.push_back(std::move(copied_hits));
+	}
+}
+
+void AiVtpClusterFactory::PopulateOutput() {
+
+	auto &pos_tensor = m_input_tensors[1];
+	auto &x_c_tensor = m_output_tensors[0];
+	auto &beta_tensor = m_output_tensors[1];
+
+	const float *pos_data = static_cast<const float *>(pos_tensor.data());
+	const float *x_c_data = static_cast<const float *>(x_c_tensor.data());
+	const float *beta_data = static_cast<const float *>(beta_tensor.data());
+
+	auto pos_shape = pos_tensor.dims();
+	auto x_c_shape = x_c_tensor.dims();
+	auto beta_shape = beta_tensor.dims();
+
+	if (pos_shape[0] != beta_shape[0] || pos_shape[0] != x_c_shape[0] || pos_shape[0] != m_event_index_queue.size()) {
+
+		auto msg = "Size mismatch in PopulateOutput: pos_shape[0]=" + std::to_string(pos_shape[0]) +
+				   ", x_c_shape[0]=" + std::to_string(x_c_shape[0]) +
+				   ", beta_shape[0]=" + std::to_string(beta_shape[0]) +
+				   ", event_index_queue.size=" + std::to_string(m_event_index_queue.size());
+		throw std::runtime_error(msg);
+	}
+
+	for (size_t i = 0; i < pos_shape[0]; ++i) {
+		std::vector<double> x_c_vec = {x_c_data[i * x_c_shape[1]], x_c_data[i * x_c_shape[1] + 1]};
+		double beta_val = static_cast<double>(beta_data[i * beta_shape[1]]);
+
+		auto oc_output = new nps::clustering::ObjectCondensationOutput(x_c_vec, beta_val);
+
+		auto ch = m_service_geometry().getBlockFromColRow(pos_data[i * pos_shape[1]], pos_data[i * pos_shape[1] + 1]);
+		oc_output->setEventIndex(m_event_index_queue[i]);
+		oc_output->setChannel(ch);
+
+		m_oc_outputs().push_back(std::move(oc_output));
 	}
 }
 
