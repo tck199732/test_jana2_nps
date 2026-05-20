@@ -20,6 +20,7 @@
 #include "onnx/OnnxRuntimeService.hpp"
 
 #include "clustering/AiVtpClusterFactory.hpp"
+#include "clustering/AiVtpInferenceFactory.hpp"
 #include "clustering/VtpClusterFactory.hpp"
 
 #include "io/CsvWriterProcessor.hpp"
@@ -79,6 +80,8 @@ static inline ProgramArguments parseArguments(int argc, char **argv) {
 	// Collect file paths (positional arguments)
 	app.add_option("files", args.filePaths, "Input files");
 
+	app.add_flag("--use-fpga", "Use FPGA-based clustering instead of AI-based clustering");
+
 	try {
 		app.parse(argc, argv);
 	} catch (const CLI::ParseError &e) {
@@ -125,22 +128,32 @@ int main(int argc, char *argv[]) {
 	}
 
 	// create fpga reco cluster factory and add it to the app
-	// auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
-	// vtpClusterGenerator->AddWiring(
-	// 	"VtpClusterFactory",	 // tag
-	// 	{"RawHits", "VtpSeeds"}, // inputs
-	// 	{"VtpClusters"}			 // outputs
-	// );
-	// app.Add(vtpClusterGenerator);
+	auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
+	if (parsedArgs.params.contains("use-fpga")) {
+		vtpClusterGenerator->AddWiring(
+			"VtpClusterFactory", // tag
+			{"RawHits"},		 // inputs
+			{"VtpClusters"}		 // outputs
+		);
+		app.Add(vtpClusterGenerator);
+	}
 
 	// create the ai reco cluster factory and add it to the app
 	auto aiVtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::AiVtpClusterFactory>();
 	aiVtpClusterGenerator->AddWiring(
-		"AiVtpClusterFactory", // tag
-		{"RawHits"},		   // inputs
-		{"RecoClusters"}	   // outputs
+		"AiVtpClusterFactory",		  // tag
+		{"RawHits"},				  // inputs
+		{"ObjectCondensationOutputs"} // outputs
 	);
 	app.Add(aiVtpClusterGenerator);
+
+	auto aiVtpInferenceGenerator = new JOmniFactoryGeneratorT<nps::clustering::AiVtpInferenceFactory>();
+	aiVtpInferenceGenerator->AddWiring(
+		"AiVtpInferenceFactory",	   // tag
+		{"ObjectCondensationOutputs"}, // inputs
+		{"RecoClusters"}			   // outputs
+	);
+	app.Add(aiVtpInferenceGenerator);
 
 	app.Add(new nps::io::CsvWriterProcessor());
 	app.Initialize();

@@ -47,6 +47,7 @@ add_executable(nps_onnx_app
         geometry/NpsGeometryService.cpp
         clustering/VtpClusterFactory.cpp
         clustering/AiVtpClusterFactory.cpp
+        clustering/AiVtpInferenceFactory.cpp
         calibration/fAdc250Service.cpp
         calibration/VtpService.cpp
         onnx/OnnxRuntimeService.cpp
