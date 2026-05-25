@@ -68,9 +68,9 @@ private:
 		this, "clus:batch_size", 1, "Number of events to process in a single batch for ONNX Runtime inference."
 	};
 
-	Parameter<int> m_onnx_nthreads{
-		this, "clus:onnx_nthreads", GetApplication()->GetParameterValue<int>("nthreads"),
-		"Number of threads to use for ONNX Runtime inference, by default set to the number of jana threads."
+    Parameter<int> m_onnx_nthreads{
+		this, "clus:onnx_nthreads", 1,
+		"Number of threads to use for ONNX Runtime inference."
 	};
 
 	Parameter<bool> m_use_cuda{this, "clus:use_cuda", false, "Whether to use CUDA for ONNX Runtime inference."};
