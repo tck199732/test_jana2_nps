@@ -19,7 +19,7 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 		return;
 	}
 
-	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), m_use_cuda());
+	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), m_onnx_nthreads(), m_use_cuda());
 	try {
 		PrepareTensors(session);
 	} catch (const std::exception &e) {
