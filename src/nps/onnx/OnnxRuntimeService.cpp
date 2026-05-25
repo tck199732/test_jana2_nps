@@ -33,9 +33,10 @@ Ort::SessionOptions OnnxRuntimeService::createSessionOptions(int num_threads, bo
 	return session_options;
 }
 
-Ort::Session &
-OnnxRuntimeService::createSession(const std::string &session_name, const std::string &model_filepath, bool use_cuda) {
-	Ort::SessionOptions options = createSessionOptions(1, use_cuda);
+Ort::Session &OnnxRuntimeService::createSession(
+	const std::string &session_name, const std::string &model_filepath, int n_threads, bool use_cuda
+) {
+	Ort::SessionOptions options = createSessionOptions(n_threads, use_cuda);
 	return createSession(session_name, model_filepath, options);
 }
 
