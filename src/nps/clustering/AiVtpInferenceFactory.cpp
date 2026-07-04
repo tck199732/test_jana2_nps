@@ -45,14 +45,33 @@ void AiVtpInferenceFactory::Inference(const std::vector<nps::clustering::ObjectC
 
 void AiVtpInferenceFactory::InferenceDummy() {
 
-	for (size_t i = 0; i < 100; ++i) {
-		auto clus = new nps::Cluster();
-		clus->setEventIndex(0);
-		clus->setClusterIndex(i);
-		clus->addHit(i, 0.0, 0.0);
-		m_clusters().push_back(clus);
-	}
+    constexpr size_t n_clusters = 100;
+    constexpr size_t n_hits_per_cluster = 8;
+    constexpr size_t work_iterations = 200;
+
+    double acc = 0.0;
+    // heavy dummy work
+    for (size_t j = 0; j < work_iterations * n_clusters; ++j) {
+        auto x = j * 0.001;
+        acc += std::sin(x) * std::cos(x);
+        acc += std::tanh(acc * 0.0001);
+    }
+
+    for (size_t i = 0; i < n_clusters; ++i) {
+        auto clus = new nps::Cluster();
+        clus->setEventIndex(0);
+        clus->setClusterIndex(i);
+        for (size_t h = 0; h < n_hits_per_cluster; ++h) {
+            auto energy = std::abs(acc) * (h + 1) * 0.1; // dummy energy
+            auto time = std::abs(acc) * (h + 1) * 0.01; // dummy time
+            clus->addHit(static_cast<int>(i * n_hits_per_cluster + h), energy, time);
+        }
+        m_clusters().push_back(clus);
+    }
+    thread_local volatile double sink = 0.0;
+    sink += acc;
 }
+
 
 void AiVtpInferenceFactory::InferenceOc(const std::vector<nps::clustering::ObjectCondensationOutput> &oc_outputs) {
 
