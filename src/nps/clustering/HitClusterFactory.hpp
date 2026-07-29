@@ -27,6 +27,7 @@ public:
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 
+	HitClusterFactory() : BaseOnnxClusterFactory("hit_clus") {}
 	void Configure();
 	void ChangeRun(int32_t run_number);
 	void Describe() const;

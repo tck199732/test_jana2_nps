@@ -18,8 +18,19 @@
 
 namespace nps::clustering {
 
+/**
+ * @brief Base class for factories that use ONNX models for clustering.
+ *
+ * This class provides a common interface and functionality for factories that perform clustering using ONNX models.
+ * It handles the preparation of input and output tensor shape, execution of the ONNX model, and management of ONNX
+ * Runtime sessions. Inheriting classes must implement the PrepareTensorValues() method to fill the input tensors which
+ * satisfy the ONNX model's requirements. Inheriting classes can also override GetBatchSize() to specify the batch size
+ * for the input tensors.
+ */
 class BaseOnnxClusterFactory : public JOmniFactory<BaseOnnxClusterFactory> {
 public:
+	explicit BaseOnnxClusterFactory(std::string prefix) { SetPrefix(std::move(prefix)); }
+
 	virtual void Configure();
 	virtual void ChangeRun(int32_t run_number);
 	virtual void Execute(int32_t run_nr, uint64_t event_index);
@@ -37,16 +48,12 @@ protected:
 	std::vector<onnx::Tensor> m_input_tensors;
 	std::vector<onnx::Tensor> m_output_tensors;
 
-	Parameter<std::string> m_model_path{
-		this, "clus:model_path", "my_model.onnx", "Path to the ONNX model for cluster reconstruction."
-	};
+	Parameter<std::string> m_model_path{this, "model_path", "my_model.onnx", "Path to the ONNX model."};
 
-	Parameter<std::string> m_session_name{
-		this, "clus:session_name", "onnx_session", "Name of the ONNX Runtime session to use for cluster reconstruction."
-	};
+	Parameter<std::string> m_session_name{this, "session_name", "onnx_session", "Name of the ONNX Runtime session."};
 
-	Parameter<int> m_num_threads{this, "clus:num_threads", 1, "Number of threads to use for ONNX Runtime."};
-	Parameter<bool> m_use_cuda{this, "clus:use_cuda", false, "Whether to use CUDA for ONNX Runtime."};
+	Parameter<int> m_num_threads{this, "num_threads", 1, "Number of threads to use for ONNX Runtime."};
+	Parameter<bool> m_use_cuda{this, "use_cuda", false, "Whether to use CUDA for ONNX Runtime."};
 };
 
 } // namespace nps::clustering
