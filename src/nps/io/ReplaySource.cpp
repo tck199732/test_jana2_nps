@@ -29,9 +29,6 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 	event.SetRunNumber(m_run_number());
 	m_chain->GetEntry(event.GetEventNumber());
 
-	std::vector<nps::RawHit *> hits;
-	std::vector<nps::VtpSeed *> seeds;
-
 	std::vector<std::vector<double>> signals; // [nblocks][ntime]
 	std::vector<int> blocks;				  // [nblocks]
 
@@ -39,9 +36,15 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 		m_buffer.Ndata_NPS_cal_fly_adcSampWaveform, MAX_BLOCKS, m_buffer.NPS_cal_fly_adcSampWaveform, blocks, signals
 	);
 
+	std::vector<nps::fadc_hit *> hits;
+	std::vector<nps::vtp_seed *> seeds;
+	hits.reserve(blocks.size());
+	seeds.reserve(m_buffer.Ndata_NPS_cal_vtpClusX);
+
 	for (size_t i = 0; i < blocks.size(); i++) {
-		auto hit = new nps::RawHit(blocks[i], std::move(signals[i]));
-		hits.push_back(hit);
+		hits.push_back(
+			new nps::fadc_hit{.channel = blocks[i], .charge = 0, .time = 0, .waveform = std::move(signals[i])}
+		);
 	}
 
 	for (int iclus = 0; iclus < m_buffer.Ndata_NPS_cal_vtpClusX; iclus++) {
@@ -52,12 +55,17 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 		auto t = m_buffer.NPS_cal_vtpClusTime[iclus];
 		auto size = m_buffer.NPS_cal_vtpClusSize[iclus];
 
-		auto seed = new nps::VtpSeed(ch, size, t, e);
-		seeds.push_back(seed);
+		seeds.push_back(new nps::vtp_seed{
+			.channel = static_cast<int>(ch),
+			.size = static_cast<int>(size),
+			.time = static_cast<double>(t),
+			.energy = static_cast<double>(e)
+
+		});
 	}
 
-	event.Insert(hits, "RawHits");
-	event.Insert(seeds, "VtpSeeds");
+	event.Insert(hits, "fadc_hits");
+	event.Insert(seeds, "vtp_seeds");
 
 	return Result::Success;
 }

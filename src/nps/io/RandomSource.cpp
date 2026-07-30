@@ -19,33 +19,42 @@ void RandomSource::Open() { std::string resource_name = GetResourceName(); }
 void RandomSource::Close() {}
 
 JEventSource::Result RandomSource::Emit(JEvent &event) {
-
 	static size_t current_event_number = 0;
 	event.SetEventNumber(current_event_number++);
 	event.SetRunNumber(m_run_number());
 
-	std::vector<nps::RawHit *> hits;
-	for (size_t ihit = 0; ihit < m_nhits(); ihit++) {
-		auto ch = m_channel_dist(m_rng);
-		std::vector<double> signal(m_nfeatures());
-		std::generate(signal.begin(), signal.end(), [&] { return m_waveform_dist(m_rng); });
-		auto hit = new nps::RawHit(ch, std::move(signal));
+	const std::size_t hit_count = m_nhits();
+	const std::size_t feature_count = m_nfeatures();
+
+	std::vector<nps::fadc_hit *> hits;
+	hits.reserve(hit_count);
+
+	std::vector<nps::vtp_seed *> seeds;
+	seeds.reserve(hit_count);
+
+	for (std::size_t ihit = 0; ihit < hit_count; ++ihit) {
+		std::vector<double> waveform(feature_count);
+
+		std::generate(waveform.begin(), waveform.end(), [this] { return m_waveform_dist(m_rng); });
+
+		const double charge = std::accumulate(waveform.begin(), waveform.end(), 0.0) * 0.1;
+
+		auto *hit = new nps::fadc_hit{
+			.channel = m_channel_dist(m_rng),
+			.charge = charge,
+			.time = m_clus_time_dist(m_rng),
+			.waveform = std::move(waveform)
+		};
+
 		hits.push_back(hit);
+
+		seeds.push_back(new nps::vtp_seed{
+			.channel = hit->channel, .size = 1, .time = m_clus_time_dist(m_rng), .energy = m_clus_energy_dist(m_rng)
+		});
 	}
 
-	// transform each hit into a VtpSeed with clus size 1
-	std::vector<nps::VtpSeed *> seeds(hits.size());
-	std::transform(hits.begin(), hits.end(), seeds.begin(), [&](const nps::RawHit *hit) {
-		return new nps::VtpSeed(
-			hit->getChannel(),
-			1,						  // size
-			m_clus_time_dist(m_rng),  // time
-			m_clus_energy_dist(m_rng) // energy
-		);
-	});
-
-	event.Insert(hits, "RawHits");
-	event.Insert(seeds, "VtpSeeds");
+	event.Insert(hits, "fadc_hits");
+	event.Insert(seeds, "vtp_seeds");
 
 	return Result::Success;
 }
