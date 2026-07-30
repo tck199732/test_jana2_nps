@@ -11,9 +11,8 @@
 #include "onnx/OnnxRuntimeService.hpp"
 #include "onnx/OnnxTensor.hpp"
 
-#include "nps/Cluster.hpp"
-#include "nps/RawHit.hpp"
-#include "nps/VtpSeed.hpp"
+#include "struct/cluster.hpp"
+#include "struct/fadc.hpp"
 
 #include <cassert>
 #include <string>
@@ -25,8 +24,8 @@ namespace nps::clustering {
 
 class WaveformClusterFactory : public BaseOnnxClusterFactory {
 public:
-	Input<nps::RawHit> m_rawhits{this, {"RawHits"}};
-	Output<nps::Cluster> m_clusters{this, "RecoClusters"};
+	Input<nps::fadc_hit> m_rawhits{this, {"fadc_hits"}};
+	Output<nps::cluster> m_clusters{this, "waveform_clusters"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 

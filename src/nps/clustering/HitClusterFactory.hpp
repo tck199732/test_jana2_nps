@@ -9,8 +9,8 @@
 #include "calibration/fAdc250Service.hpp"
 #include "geometry/NpsGeometryService.hpp"
 
-#include "nps/Cluster.hpp"
-#include "nps/fAdcHit.hpp"
+#include "struct/cluster.hpp"
+#include "struct/fadc.hpp"
 
 #include <cassert>
 #include <string>
@@ -22,8 +22,8 @@ namespace nps::clustering {
 
 class HitClusterFactory : public BaseOnnxClusterFactory {
 public:
-	Input<nps::fAdcHit> m_fadchits{this, {"fAdcHits"}};
-	Output<nps::Cluster> m_clusters{this, "HitClusters"};
+	Input<nps::fadc_hit> m_fadchits{this, {"fadc_hits"}};
+	Output<nps::cluster> m_clusters{this, "hit_clusters"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 

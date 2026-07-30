@@ -19,14 +19,14 @@ bool WaveformClusterFactory::PrepareTensorValues() {
 	// Fill x (waveforms)
 	size_t offset = 0;
 	for (size_t i = 0; i < n_hits; ++i) {
-		const auto &waveform = hits[i]->getWaveform();
+		const auto &waveform = hits[i]->waveform;
 		m_input_tensors[0].fill_n(waveform.data(), offset, waveform.size());
 		offset += waveform.size();
 	}
 
 	// Fill pos (col, row per hit)
 	for (size_t i = 0; i < n_hits; ++i) {
-		auto [col, row] = m_service_geometry().getColRowFromBlock(hits[i]->getChannel());
+		auto [col, row] = m_service_geometry().getColRowFromBlock(hits[i]->channel);
 		const float pos[2] = {static_cast<float>(col), static_cast<float>(row)};
 		m_input_tensors[1].fill_n(pos, i * 2, 2); // 2 elements at offset i*2, no heap alloc
 	}
