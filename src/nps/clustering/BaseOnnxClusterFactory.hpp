@@ -29,8 +29,6 @@ namespace nps::clustering {
  */
 class BaseOnnxClusterFactory : public JOmniFactory<BaseOnnxClusterFactory> {
 public:
-	explicit BaseOnnxClusterFactory(std::string prefix) { SetPrefix(std::move(prefix)); }
-
 	virtual void Configure();
 	virtual void ChangeRun(int32_t run_number);
 	virtual void Execute(int32_t run_nr, uint64_t event_index);
