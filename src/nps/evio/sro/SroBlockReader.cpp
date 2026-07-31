@@ -27,13 +27,20 @@ MappedFile::MappedFile(const std::string &path) {
 		throw std::runtime_error("MappedFile: cannot stat " + path);
 	}
 	m_bytes = static_cast<size_t>(file_stat.st_size);
-	m_base = ::mmap(nullptr, m_bytes, PROT_READ, MAP_PRIVATE, fd, 0);
+	m_base = ::mmap(
+		nullptr,	 // OS chooses the address
+		m_bytes,	 // full file size
+		PROT_READ,	 // read-only
+		MAP_PRIVATE, // private, file is not modified
+		fd,			 // file descriptor
+		0			 // offset from the start of the file
+	);
 	::close(fd); // the mapping keeps its own reference to the file
 	if (m_base == MAP_FAILED) {
 		m_base = nullptr;
 		throw std::runtime_error("MappedFile: mmap failed for " + path);
 	}
-	::madvise(m_base, m_bytes, MADV_SEQUENTIAL);
+	::madvise(m_base, m_bytes, MADV_SEQUENTIAL); // hint to OS for sequential access
 }
 
 MappedFile::~MappedFile() {
@@ -140,6 +147,14 @@ bool SroBlockReader::ReadNextBlockMmap(RawBlock &block) {
 	if (m_mapped == nullptr && !OpenNextFile()) {
 		return false;
 	}
+
+	// evio 4 header format, see p. 7 of https://jeffersonlab.github.io/evio/doc-6.0/format_guide/evio_Formats.pdf
+	// 1 : block length, Length of block in 32-bit words, inclusive
+	// 2 : block number, Order of block in network transfer (record id) starting at 1. From ROC: -1 if payload banks not
+	// being built. 3 : header length (always 8 ?) 4 : event count (Number of evio events (payload banks) in block, not
+	// including dictionary) 5 : reserved 1, If content is being built (eg ROC Raw type), = source CODA id, else
+	// reserved 6 : Bit info | version (Evio format version in low 8 bits. Bit Info in high 24 bits) 7 : reserved 2 8 :
+	// magic number (Number for endianness tracking, 0xC0DA0100)
 
 	while (true) {
 		size_t words_left = m_mapped->WordCount() - m_map_pos;

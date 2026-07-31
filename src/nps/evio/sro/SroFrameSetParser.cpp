@@ -64,6 +64,8 @@ void UnpackFadcPayload(
 // Parses one ROC time-slice bank (stream info + payload banks). Returns false on
 // a structure error; the caller then abandons this ROC bank but not the set.
 bool ParseRocBank(const uint32_t *words, const BankHeader &roc_bank, uint32_t frame_index, HitSink &out) {
+
+	// page 22
 	uint16_t rocid = static_cast<uint16_t>(roc_bank.tag);
 
 	BankHeader stream_info;
@@ -82,7 +84,7 @@ bool ParseRocBank(const uint32_t *words, const BankHeader &roc_bank, uint32_t fr
 	pos += 4; // timestamp values are cross-checked at set level via SIB; skip here
 
 	uint32_t map_header = words[pos];
-	uint32_t map_words = map_header & 0xFFFF;
+	uint32_t map_words = map_header & 0xFFFF; // ais len
 	if (map_words == 0) {
 		out.stats.fake_frames++; // aggregator gap fill: stream with no payloads
 		return true;
@@ -91,7 +93,8 @@ bool ParseRocBank(const uint32_t *words, const BankHeader &roc_bank, uint32_t fr
 		return false;
 	}
 	uint32_t padding_bytes = (map_header >> 22) & 0x3;
-	uint32_t entry_count = map_words * 2 - (padding_bytes >> 1);
+	uint32_t entry_count =
+		map_words * 2 - (padding_bytes >> 1); // 2 payloads in each 32bit word, if only 1 payload, the other is padding
 
 	// payload id -> module type (0 FADC250, 1 DCRB) and VME slot, from the map.
 	int8_t payload_module[kMaxPayloadId + 1];
@@ -100,15 +103,17 @@ bool ParseRocBank(const uint32_t *words, const BankHeader &roc_bank, uint32_t fr
 		payload_module[payload_id] = -1;
 		payload_slot[payload_id] = 0;
 	}
+
+	// see AIS in page 22
 	const uint16_t *map_entries = reinterpret_cast<const uint16_t *>(&words[pos + 1]);
 	for (uint32_t entry_i = 0; entry_i < entry_count; entry_i++) {
 		uint16_t entry = map_entries[entry_i];
-		int32_t payload_id = entry & 0x1F;
+		int32_t payload_id = entry & 0x1F; // payload port #
 		if (payload_id < 1 || payload_id > kMaxPayloadId) {
 			out.stats.structure_errors++;
 			continue;
 		}
-		payload_module[payload_id] = static_cast<int8_t>((entry >> 8) & 0xF);
+		payload_module[payload_id] = static_cast<int8_t>((entry >> 8) & 0xF); // module id
 		// payload_slot[payload_id] = static_cast<uint8_t>(PayloadToSlot(payload_id));
 	}
 
