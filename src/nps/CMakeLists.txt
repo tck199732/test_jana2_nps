@@ -50,6 +50,7 @@ add_executable(nps_onnx_app
     clustering/WaveformClusterFactory.cpp
     clustering/HitClusterFactory.cpp
     clustering/VtpClusterFactory.cpp
+    clustering/EvioParsingFactory.cpp
     
     geometry/NpsGeometryService.cpp
     calibration/fAdc250Service.cpp

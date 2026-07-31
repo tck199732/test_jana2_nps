@@ -19,11 +19,13 @@
 #include "geometry/NpsGeometryService.hpp"
 #include "onnx/OnnxRuntimeService.hpp"
 
+#include "clustering/EvioParsingFactory.hpp"
 #include "clustering/HitClusterFactory.hpp"
 #include "clustering/VtpClusterFactory.hpp"
 #include "clustering/WaveformClusterFactory.hpp"
 
 #include "io/CsvWriterProcessor.hpp"
+#include "io/EvioSroBlockSource.hpp"
 #include "io/RandomSource.hpp"
 #include "io/ReplaySource.hpp"
 
@@ -122,6 +124,7 @@ int main(int argc, char *argv[]) {
 	// add all available event sources, use event_source_type to select
 	app.Add(new JEventSourceGeneratorT<nps::io::RandomSource>);
 	app.Add(new JEventSourceGeneratorT<nps::io::ReplaySource>);
+	app.Add(new JEventSourceGeneratorT<nps::io::EvioSroBlockSource>);
 
 	if (parsedArgs.filePaths.empty()) {
 		std::cerr << "Error: No input files provided for replay source." << std::endl;
@@ -131,8 +134,15 @@ int main(int argc, char *argv[]) {
 		app.Add(filePath);
 	}
 
-	auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
-	if (parsedArgs.params.contains("enable_vtp_clustering") && parsedArgs.params["enable_vtp_clustering"] == "true") {
+	bool enableVtpClustering =
+		parsedArgs.params.contains("enable_vtp_clustering") && parsedArgs.params["enable_vtp_clustering"] == "true";
+	bool enableWaveformClustering = parsedArgs.params.contains("enable_waveform_clustering") &&
+									parsedArgs.params["enable_waveform_clustering"] == "true";
+	bool enableHitClustering =
+		parsedArgs.params.contains("enable_hit_clustering") && parsedArgs.params["enable_hit_clustering"] == "true";
+
+	if (enableVtpClustering) {
+		auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
 		vtpClusterGenerator->AddWiring(
 			"VtpClusterFactory",			 // tag
 			{"fadc_waveforms", "vtp_seeds"}, // inputs
@@ -141,8 +151,7 @@ int main(int argc, char *argv[]) {
 		app.Add(vtpClusterGenerator);
 	}
 
-	if (parsedArgs.params.contains("enable_waveform_clustering") &&
-		parsedArgs.params["enable_waveform_clustering"] == "true") {
+	if (enableWaveformClustering) {
 		auto WaveformClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::WaveformClusterFactory>();
 		WaveformClusterGenerator->AddWiring(
 			"WaveformClusterFactory", // tag
@@ -152,7 +161,7 @@ int main(int argc, char *argv[]) {
 		app.Add(WaveformClusterGenerator);
 	}
 
-	if (parsedArgs.params.contains("enable_hit_clustering") && parsedArgs.params["enable_hit_clustering"] == "true") {
+	if (enableHitClustering) {
 		auto HitClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::HitClusterFactory>();
 		HitClusterGenerator->AddWiring(
 			"HitClusterFactory", // tag
@@ -160,6 +169,16 @@ int main(int argc, char *argv[]) {
 			{"hit_clusters"}	 // outputs
 		);
 		app.Add(HitClusterGenerator);
+	}
+
+	if (enableWaveformClustering || enableHitClustering) {
+		auto EvioParsingGenerator = new JOmniFactoryGeneratorT<nps::clustering::EvioParsingFactory>();
+		EvioParsingGenerator->AddWiring(
+			"EvioParsingFactory",			// tag
+			{"sro_block_data"},				// inputs
+			{"fadc_hits", "fadc_waveforms"} // outputs
+		);
+		app.Add(EvioParsingGenerator);
 	}
 
 	app.Add(new nps::io::CsvWriterProcessor());
