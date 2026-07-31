@@ -134,9 +134,9 @@ int main(int argc, char *argv[]) {
 	auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
 	if (parsedArgs.params.contains("enable_vtp_clustering") && parsedArgs.params["enable_vtp_clustering"] == "true") {
 		vtpClusterGenerator->AddWiring(
-			"VtpClusterFactory",		// tag
-			{"fadc_hits", "vtp_seeds"}, // inputs
-			{"vtp_clusters"}			// outputs
+			"VtpClusterFactory",			 // tag
+			{"fadc_waveforms", "vtp_seeds"}, // inputs
+			{"vtp_clusters"}				 // outputs
 		);
 		app.Add(vtpClusterGenerator);
 	}
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
 		auto WaveformClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::WaveformClusterFactory>();
 		WaveformClusterGenerator->AddWiring(
 			"WaveformClusterFactory", // tag
-			{"fadc_hits"},			  // inputs
+			{"fadc_waveforms"},		  // inputs
 			{"waveform_clusters"}	  // outputs
 		);
 		app.Add(WaveformClusterGenerator);
