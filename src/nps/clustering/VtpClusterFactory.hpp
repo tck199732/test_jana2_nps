@@ -21,7 +21,7 @@ namespace nps::clustering {
 
 class VtpClusterFactory : public JOmniFactory<VtpClusterFactory> {
 public:
-	Input<nps::fadc_hit> m_fadc_hits{this, {"fadc_hits"}};
+	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms"}};
 	Input<nps::vtp_seed> m_vtp_seeds{this, {"vtp_seeds"}};
 	Output<nps::cluster> m_clusters{this, "vtp_clusters"};
 
@@ -35,13 +35,13 @@ public:
 
 private:
 	// for processing fAdc signals
-	void processRawWaveform(const std::vector<double> &waveform, int channel, std::vector<fadc_hit> &hits);
+	void processRawWaveform(const nps::fadc_waveform &waveform, std::vector<nps::fadc_hit> &hits);
 	std::vector<int> findPulses(const std::vector<double> &waveform_adc, double thr, int clk) const;
 
 	// process vtp clusterization
-	std::vector<cluster> selectGridCandidate(const std::vector<fadc_hit> &fadc_hits);
-	bool isTriggered(const cluster &clus);
-	bool isMatched(const cluster &clus, const vtp_seed &seed, double de_thr, double tmin, double tmax);
+	std::vector<nps::cluster> selectGridCandidate(const std::vector<nps::fadc_hit> &hits);
+	bool isTriggered(const nps::cluster &clus);
+	bool isMatched(const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax);
 
 	Parameter<double> m_de_thr{this, "clus:de_thr", 5.0, "Energy difference threshold for cluster matching"};
 	Parameter<double> m_tmin{this, "clus:tmin", 50.0, "Minimum time for cluster matching"};

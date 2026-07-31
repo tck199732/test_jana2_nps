@@ -14,9 +14,6 @@
 #include <vector>
 
 #include "geometry/NpsGeometryService.hpp"
-// #include "nps/RawHit.hpp"
-// #include "nps/VtpSeed.hpp"
-
 #include "struct/fadc.hpp"
 #include "struct/vtp.hpp"
 

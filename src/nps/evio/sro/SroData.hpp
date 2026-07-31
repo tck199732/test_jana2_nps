@@ -23,10 +23,15 @@ struct FadcHit {
 	uint8_t channel;	 ///< 0-15
 	uint16_t charge;	 ///< raw ADC integral, 13 bits, no pedestal/gain calibration
 	uint16_t time_ticks; ///< within-frame time, 4 ns ticks, 14 bits
+};
 
-	// not implemented yet
-	// std::vector<uint16_t> samples;
-	// std::vector<uint16_t> timestamps;
+struct FadcWaveform {
+	uint32_t frame_index; ///< index into SroBlockData::frames
+	uint16_t rocid;
+	uint8_t slot;					  ///< physical VME slot (payload2slot applied)
+	uint8_t channel;				  ///< 0-15
+	std::vector<uint16_t> samples;	  ///< raw ADC samples, 12 bits
+	std::vector<uint16_t> timestamps; ///< within-frame time, 4 ns ticks
 };
 
 /// One time frame (= one aggregated frame set on disk).

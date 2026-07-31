@@ -36,15 +36,13 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 		m_buffer.Ndata_NPS_cal_fly_adcSampWaveform, MAX_BLOCKS, m_buffer.NPS_cal_fly_adcSampWaveform, blocks, signals
 	);
 
-	std::vector<nps::fadc_hit *> hits;
+	std::vector<nps::fadc_waveform *> waveforms;
 	std::vector<nps::vtp_seed *> seeds;
-	hits.reserve(blocks.size());
+	waveforms.reserve(blocks.size());
 	seeds.reserve(m_buffer.Ndata_NPS_cal_vtpClusX);
 
 	for (size_t i = 0; i < blocks.size(); i++) {
-		hits.push_back(
-			new nps::fadc_hit{.channel = blocks[i], .charge = 0, .time = 0, .waveform = std::move(signals[i])}
-		);
+		waveforms.push_back(new nps::fadc_waveform{.channel = blocks[i], .samples = std::move(signals[i])});
 	}
 
 	for (int iclus = 0; iclus < m_buffer.Ndata_NPS_cal_vtpClusX; iclus++) {
@@ -64,7 +62,7 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 		});
 	}
 
-	event.Insert(hits, "fadc_hits");
+	event.Insert(waveforms, "fadc_waveforms");
 	event.Insert(seeds, "vtp_seeds");
 
 	return Result::Success;

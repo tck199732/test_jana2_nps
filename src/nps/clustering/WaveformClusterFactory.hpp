@@ -24,7 +24,7 @@ namespace nps::clustering {
 
 class WaveformClusterFactory : public BaseOnnxClusterFactory {
 public:
-	Input<nps::fadc_hit> m_rawhits{this, {"fadc_hits"}};
+	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms"}};
 	Output<nps::cluster> m_clusters{this, "waveform_clusters"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};

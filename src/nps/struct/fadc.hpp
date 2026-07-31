@@ -7,10 +7,15 @@
 namespace nps {
 
 struct fadc_hit {
-	int channel;				  // channel no. / block ID (0-1079)
-	double charge;				  // integrated charge before pedestal
-	double time;				  // rise time determined by leading edge
-	std::vector<double> waveform; // ADC samples of the waveform
+	int channel;   // channel no. / block ID (0-1079)
+	double charge; // integrated charge before pedestal
+	double time;   // rise time determined by leading edge
+};
+
+struct fadc_waveform {
+	int channel;					// channel no. / block ID (0-1079)
+	std::vector<double> samples;	// ADC samples of the waveform
+	std::vector<double> timestamps; // timestamps of the waveform samples
 };
 
 struct fadc_cfg {
