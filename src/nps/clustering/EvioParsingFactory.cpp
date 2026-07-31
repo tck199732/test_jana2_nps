@@ -8,29 +8,26 @@ void EvioParsingFactory::ChangeRun(int32_t run_number) {}
 
 void EvioParsingFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
-	for (auto &data : m_block_data()) {
+	std::vector<const evio::sro::SroBlockData *> block_data = m_block_data();
+	for (const auto *data : block_data) {
 		PopulateFadcHits(data);
 		PopulateFadcWaveforms(data);
 	}
 	return;
 }
 
-void EvioParsingFactory::PopulateFadcHits(const evio::sro::SroBlockData &data) {
-	auto &output_hits = m_fadc_hits();
-	output_hits.reserve(output_hits.size() + data.fadc_hits.size());
+void EvioParsingFactory::PopulateFadcHits(const evio::sro::SroBlockData *data) {
 
-	for (const auto &evio_fadc : data.fadc_hits) {
-		output_hits.emplace_back(
-			nps::fadc_hit{
-				.channel = evio_fadc.channel,
-				.charge = evio_fadc.charge,
-				.time = evio_fadc.time_ticks,
-			}
-		);
+	for (const auto &evio_fadc : data->fadc_hits) {
+		m_fadc_hits().emplace_back(new nps::fadc_hit{
+			.channel = evio_fadc.channel,
+			.charge = evio_fadc.charge,
+			.time = evio_fadc.time_ticks,
+		});
 	}
 }
 
-void EvioParsingFactory::PopulateFadcWaveforms(const evio::sro::SroBlockData &data) {
+void EvioParsingFactory::PopulateFadcWaveforms(const evio::sro::SroBlockData *data) {
 	// no implementation yet
 }
 

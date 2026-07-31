@@ -6,8 +6,7 @@
 #include <JANA/JService.h>
 
 #include "evio/sro/SroBlockReader.hpp"
-#include "struct/fadc_hits.hpp"
-#include "struct/fadc_waveform.hpp"
+#include "struct/fadc.hpp"
 
 #include <cassert>
 #include <unordered_set>
@@ -26,8 +25,8 @@ public:
 	void Execute(int32_t run_nr, uint64_t event_index);
 
 private:
-	void PopulateFadcHits(const evio::sro::SroBlockData &data);
-	void PopulateFadcWaveforms(const evio::sro::SroBlockData &data);
+	void PopulateFadcHits(const evio::sro::SroBlockData *data);
+	void PopulateFadcWaveforms(const evio::sro::SroBlockData *data);
 };
 
 } // namespace nps::clustering
