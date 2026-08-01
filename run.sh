@@ -23,19 +23,30 @@ while getopts "s" opt; do
   esac
 done
 
-# Sample run script for RecoClusterVTP plugin. Adjust the parameters as needed.
 DATA_DIR="/lustre24/expphy/volatile/hallc/nps/nps-ana/wf_test/ROOTfiles"
 INPUT="${DATA_DIR}/nps_hms_coin_4599_0_1_-1.root"
 
-JANA_CMD="jana \
-    -Pplugins=RecoClusterVTP \
-    -Pvtp_config_file=database/jlog/nps_run_4599_vtp_config.csv \
-    -Pvme_config_file=database/jlog/nps_run_4599_vme_config.csv \
-    -Pnps:geo_config_file=database/geo/channel_map.csv \
-    -Preplay_source:max_events=1000 \
-    -Pjana:plugin_path=./build/plugins/RecoClusterVTP \
-    ${INPUT}"
-    
+JANA_CMD="./build/src/nps/nps_onnx_app \
+    -pjana:timeout=0 \
+    -pjana:nevents=10000 \
+    -pnps:output_tag=4599 \
+    -pgeo:config_file=database/geo/channel_map.csv \
+    -pcalib:fadc_config_file=database/jlog/nps_run_4599_vme_config.csv \
+    -pcalib:vtp_config_file=database/jlog/nps_run_4599_vtp_config.csv \
+    -pWaveformClusterFactory:model_path=database/models/vtp_reco/my_model.onnx \
+    -pWaveformClusterFactory:session_name=waveform_clustering_session \
+    -pWaveformClusterFactory:batch_size=1 \
+    -pWaveformClusterFactory:use_cuda=false \
+    -pHitClusterFactory:model_path=database/models/sim/my_model.onnx \
+    -pHitClusterFactory:session_name=hit_clustering_session \
+    -pHitClusterFactory:batch_size=1 \
+    -pHitClusterFactory:use_cuda=false \
+    -pevent_source_type=nps::io::RandomSource \
+    -penable_waveform_clustering=false \
+    -penable_vtp_clustering=false \
+    -penable_hit_clustering=true \
+    -pnthreads=1 \
+    $INPUT"
 
 
 if [ "$USE_DOCKER" = true ]; then
@@ -49,7 +60,6 @@ if [ "$USE_DOCKER" = true ]; then
         bash -lc "$JANA_CMD"
 
 else
-
     singularity exec \
         --bind $(pwd) \
         --bind ${DATA_DIR} \
@@ -57,7 +67,6 @@ else
         bash -c "$JANA_CMD"
 
 fi
-
 
 
 
