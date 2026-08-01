@@ -9,10 +9,9 @@
 #include "calibration/fAdc250Service.hpp"
 #include "geometry/NpsGeometryService.hpp"
 
-#include "nps/Cluster.hpp"
-#include "nps/RawHit.hpp"
-#include "nps/VtpSeed.hpp"
-#include "nps/fAdcHit.hpp"
+#include "struct/cluster.hpp"
+#include "struct/fadc.hpp"
+#include "struct/vtp.hpp"
 
 #include <cassert>
 #include <unordered_set>
@@ -22,9 +21,9 @@ namespace nps::clustering {
 
 class VtpClusterFactory : public JOmniFactory<VtpClusterFactory> {
 public:
-	Input<nps::RawHit> m_rawhits{this, {"RawHits"}};
-	Input<nps::VtpSeed> m_vtpseeds{this, {"VtpSeeds"}};
-	Output<nps::Cluster> m_clusters{this, "VtpClusters"};
+	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms"}};
+	Input<nps::vtp_seed> m_vtp_seeds{this, {"vtp_seeds"}};
+	Output<nps::cluster> m_clusters{this, "vtp_clusters"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 	Service<nps::calib::VtpService> m_service_vtp{this};
@@ -36,13 +35,13 @@ public:
 
 private:
 	// for processing fAdc signals
-	void processRawWaveform(const std::vector<double> &waveform, int channel, std::vector<fAdcHit> &hits);
+	void processRawWaveform(const nps::fadc_waveform &waveform, std::vector<nps::fadc_hit> &hits);
 	std::vector<int> findPulses(const std::vector<double> &waveform_adc, double thr, int clk) const;
 
 	// process vtp clusterization
-	std::vector<Cluster> selectGridCandidate(const std::vector<fAdcHit> &fadc_hits);
-	bool isTriggered(const Cluster &clus);
-	bool isMatched(const Cluster &clus, const VtpSeed &seed, double de_thr, double tmin, double tmax);
+	std::vector<nps::cluster> selectGridCandidate(const std::vector<nps::fadc_hit> &hits);
+	bool isTriggered(const nps::cluster &clus);
+	bool isMatched(const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax);
 
 	Parameter<double> m_de_thr{this, "clus:de_thr", 5.0, "Energy difference threshold for cluster matching"};
 	Parameter<double> m_tmin{this, "clus:tmin", 50.0, "Minimum time for cluster matching"};

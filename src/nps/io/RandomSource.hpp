@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "nps/RawHit.hpp"
-#include "nps/VtpSeed.hpp"
+#include "struct/fadc.hpp"
+#include "struct/vtp.hpp"
 
 namespace nps::io {
 

@@ -4,65 +4,65 @@ namespace nps::clustering {
 
 void VtpClusterFactory::Configure() { m_service_geometry(); }
 
-void VtpClusterFactory::ChangeRun(int32_t run_number) {
-	// TODO : update config in all services
-	// m_service_vtp().Reset();
-	// m_service_fadc().Reset();
-}
+void VtpClusterFactory::ChangeRun(int32_t run_number) {}
 
 void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
+	const auto &waveforms = m_fadc_waveforms();
+	const auto &seeds = m_vtp_seeds();
+
 	// find all hits for each waveform
-	std::vector<fAdcHit> fadc_hits;
-	for (const auto &hit : m_rawhits()) {
-		auto channel = hit->getChannel();
-		auto waveform = hit->getWaveform();
-		processRawWaveform(waveform, channel, fadc_hits);
+	std::vector<nps::fadc_hit> fadc_hits;
+	fadc_hits.reserve(waveforms.size());
+
+	for (const auto *waveform_ptr : waveforms) {
+		if (waveform_ptr == nullptr) {
+			continue;
+		}
+
+		processRawWaveform(*waveform_ptr, fadc_hits);
 	}
 
 	// vtp clusterization
-	std::vector<Cluster> candidates = selectGridCandidate(fadc_hits);
-	std::vector<Cluster> reco_clusters;
-	for (auto c : candidates) {
-		if (isTriggered(c)) {
-			reco_clusters.push_back(std::move(c));
+	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits);
+	std::vector<nps::cluster> reco_clusters;
+	reco_clusters.reserve(candidates.size());
+	for (auto &candidate : candidates) {
+		if (isTriggered(candidate)) {
+			reco_clusters.emplace_back(std::move(candidate));
 		}
 	}
 
+	auto &output_clusters = m_clusters();
+
 	// compare with VTP seeds and fill the matched clusters
-	std::unordered_set<int> usedRecoIndices;
-	std::unordered_set<int> usedVtpIndices;
-
-	const auto &seeds = m_vtpseeds();
-
-	for (size_t i_seed = 0; i_seed < seeds.size(); i_seed++) {
-
-		const nps::VtpSeed &seed = *seeds[i_seed];
-		if (usedVtpIndices.count(i_seed)) {
+	std::vector<bool> reco_used(reco_clusters.size(), false);
+	for (const auto *seed_ptr : seeds) {
+		if (seed_ptr == nullptr) {
 			continue;
 		}
-		for (int i_reco = 0; i_reco < reco_clusters.size(); i_reco++) {
-			if (usedRecoIndices.count(i_reco)) {
+		const auto &seed = *seed_ptr;
+
+		for (size_t i = 0; i < reco_clusters.size(); i++) {
+			if (reco_used[i]) {
 				continue;
 			}
-			auto match = isMatched(reco_clusters[i_reco], seed, m_de_thr(), m_tmin(), m_tmax());
+			auto match = isMatched(reco_clusters[i], seed, m_de_thr(), m_tmin(), m_tmax());
 			if (match) {
-				usedRecoIndices.insert(i_reco);
-				usedVtpIndices.insert(i_seed);
-				// output_clusters.push_back(std::move(reco_clusters[i_reco]));
-
-				m_clusters().push_back(new nps::Cluster(std::move(reco_clusters[i_reco])));
-				break;
+				reco_used[i] = true;
+				output_clusters.push_back(new nps::cluster(std::move(reco_clusters[i])));
+				break; // Move to the next seed after a match
 			}
 		}
 	}
 }
 
-void VtpClusterFactory::processRawWaveform(
-	const std::vector<double> &waveform, int channel, std::vector<fAdcHit> &hits
-) {
+void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform &waveform, std::vector<nps::fadc_hit> &hits) {
 
 	const auto &cfg = m_service_fadc().getConfig(); // get the latest config in case it was updated at runtime
+
+	const int channel = waveform.channel;
+	const auto &samples = waveform.samples;
 
 	auto clk = cfg.clock_cycles;
 	auto dt = cfg.time_interval;
@@ -73,13 +73,13 @@ void VtpClusterFactory::processRawWaveform(
 	auto nsa = cfg.nsa.at(channel);
 	auto nsb = cfg.nsb.at(channel);
 
-	auto pulses = findPulses(waveform, thr, clk);
-	for (const auto &p : pulses) {
+	const auto pulse_times = findPulses(samples, thr, clk);
+	for (const int t : pulse_times) {
 		// integration
-		int begin = std::max(0, p - nsb);
-		int end = std::min((int)waveform.size() - 1, p + nsa - 1);
+		int begin = std::max(0, t - nsb);
+		int end = std::min((int)samples.size() - 1, t + nsa - 1);
 		int nsamples = end - begin + 1;
-		auto raw_sum = std::accumulate(waveform.begin() + begin, waveform.begin() + end + 1, 0.0);
+		auto raw_sum = std::accumulate(samples.begin() + begin, samples.begin() + end + 1, 0.0);
 
 		// pedestal subtraction
 		auto ped_sub = static_cast<int>(ped * nsamples + (0.001 * nsamples));
@@ -89,8 +89,13 @@ void VtpClusterFactory::processRawWaveform(
 		charge = static_cast<int>(charge * gain * 256.0 / 256.0);
 		charge = std::max(0, std::min(8191, charge));
 
-		auto hit = nps::fAdcHit(channel, charge, p);
-		hits.push_back(hit);
+		hits.emplace_back(
+			nps::fadc_hit{
+				.channel = static_cast<int>(channel),
+				.charge = static_cast<double>(charge),
+				.time = static_cast<double>(t),
+			}
+		);
 	}
 }
 
@@ -121,52 +126,61 @@ std::vector<int> VtpClusterFactory::findPulses(const std::vector<double> &wavefo
 	return res;
 }
 
-std::vector<nps::Cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fAdcHit> &fadc_hits) {
+std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fadc_hit> &hits) {
 
-	auto vtp_cfg = m_service_vtp().getConfig();
-	auto fadc_cfg = m_service_fadc().getConfig();
+	const auto &vtp_cfg = m_service_vtp().getConfig();
+	const auto &fadc_cfg = m_service_fadc().getConfig();
 
-	std::vector<nps::Cluster> candidates;
+	std::vector<nps::cluster> candidates;
+	candidates.reserve(hits.size()); // number of hits >= number of clusters
 
-	for (int i = 0; i < fadc_hits.size(); i++) {
-		nps::Cluster clus;
+	for (std::size_t i = 0; i < hits.size(); ++i) {
+		const auto &hit = hits[i];
 
-		// add cluster seed
-		auto ch_seed = fadc_hits[i].getChannel();
-		auto t_seed = fadc_hits[i].getTime();
-		auto e_seed = fadc_hits[i].getEnergy();
-		clus.addHit(ch_seed, e_seed, t_seed);
+		nps::cluster candidate;
+		candidate.channels.reserve(9);
+		candidate.energies.reserve(9);
+		candidate.times.reserve(9);
 
-		auto clus_dt = vtp_cfg.cluster_hit_dt[ch_seed] / fadc_cfg.time_interval; // in unit of time bucket
+		candidate.channels.push_back(hit.channel);
+		candidate.energies.push_back(hit.charge);
+		candidate.times.push_back(hit.time);
 
-		// add neighboring blocks in 3x3 grid around the seed
-		for (int j = 0; j < fadc_hits.size(); j++) {
+		const auto it = vtp_cfg.cluster_hit_dt.find(hit.channel);
+		if (it == vtp_cfg.cluster_hit_dt.end()) {
+			continue; // or throw an exception
+		}
+
+		const auto clus_dt = it->second / fadc_cfg.time_interval; // in unit of time bucket
+		for (std::size_t j = 0; j < hits.size(); ++j) {
 			if (i == j) {
 				continue;
 			}
-			auto ch = fadc_hits[j].getChannel();
-			auto e = fadc_hits[j].getEnergy();
-			auto t = fadc_hits[j].getTime();
 
-			if (std::abs(t - t_seed) > clus_dt) {
+			const auto &neighbor_hit = hits[j];
+			if (std::abs(neighbor_hit.time - hit.time) > clus_dt) {
 				continue;
 			}
 
-			if (m_service_geometry().isInsideGrid(ch_seed, ch, 3)) {
-				clus.addHit(ch, e, t);
+			if (m_service_geometry().isInsideGrid(hit.channel, neighbor_hit.channel, 3)) {
+				candidate.channels.push_back(neighbor_hit.channel);
+				candidate.energies.push_back(neighbor_hit.charge);
+				candidate.times.push_back(neighbor_hit.time);
 			}
 		}
-		candidates.push_back(clus);
+		candidates.emplace_back(std::move(candidate));
 	}
+
 	return candidates;
 }
 
-bool VtpClusterFactory::isTriggered(const nps::Cluster &clus) {
+bool VtpClusterFactory::isTriggered(const nps::cluster &clus) {
 	const auto &cfg = m_service_vtp().getConfig();
 
-	auto channels = clus.getChannels();
-	auto energies = clus.getEnergies();
-	auto times = clus.getTimes();
+	const auto &channels = clus.channels;
+	const auto &energies = clus.energies;
+	const auto &times = clus.times;
+
 	int size = channels.size();
 	auto ch_seed = channels[0]; // first hit is the seed
 
@@ -195,25 +209,17 @@ bool VtpClusterFactory::isTriggered(const nps::Cluster &clus) {
 }
 
 bool VtpClusterFactory::isMatched(
-	const nps::Cluster &clus, const nps::VtpSeed &seed, double de_thr, double tmin, double tmax
+	const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax
 ) {
-	auto vtp_ch = seed.getChannel(); // vtp seed channel
-	auto vtp_e = seed.getEnergy();	 // vtp cluster energy (total)
-	auto vtp_time = seed.getTime();	 // vtp seed time
-	auto vtp_size = seed.getSize();	 // vtp cluster size
 
-	auto reco_size = clus.getChannels().size();							// reco cluster size
-	auto reco_ch = clus.getChannels()[0];								// reco seed channel
-	auto reco_time = clus.getTimes()[0];								// reco seed time
-	auto reco_es = clus.getEnergies();									// reco cluster energy
-	auto reco_e = std::accumulate(reco_es.begin(), reco_es.end(), 0.0); // total energy of reco cluster
-
-	bool match = (vtp_ch == reco_ch);			  // same seed channel
-	match &= (vtp_time == reco_time);			  // same rise time
-	match &= (vtp_size == reco_size);			  // same cluster size
-	match &= (std::abs(vtp_e - reco_e) < de_thr); // energy difference within threshold
+	bool match = (seed.channel == clus.channels[0]); // same seed channel
+	match &= (seed.time == clus.times[0]);			 // same rise time
+	match &= (seed.size == clus.channels.size());	 // same cluster size
+	match &=
+		(std::abs(seed.energy - std::accumulate(clus.energies.begin(), clus.energies.end(), 0.0)) <
+		 de_thr); // energy difference within threshold
 	// time window requirement (incorrect integration near edge due to readout window)
-	match &= (vtp_time >= tmin) && (vtp_time <= tmax);
+	match &= (seed.time >= tmin) && (seed.time <= tmax);
 	return match;
 }
 } // namespace nps::clustering

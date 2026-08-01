@@ -41,15 +41,25 @@ FetchContent_MakeAvailable(fmt)
 
 # --------- CREATE TDIS EXECUTABLE ----------------
 add_executable(nps_onnx_app
-        main.cpp
-        io/ReplaySource.cpp
-        io/RandomSource.cpp
-        geometry/NpsGeometryService.cpp
-        clustering/VtpClusterFactory.cpp
-        clustering/AiVtpClusterFactory.cpp
-        calibration/fAdc250Service.cpp
-        calibration/VtpService.cpp
-        onnx/OnnxRuntimeService.cpp
+    main.cpp
+    io/ReplaySource.cpp
+    io/RandomSource.cpp
+    io/EvioSroBlockSource.cpp
+
+    clustering/BaseOnnxClusterFactory.cpp
+    clustering/WaveformClusterFactory.cpp
+    clustering/HitClusterFactory.cpp
+    clustering/VtpClusterFactory.cpp
+    clustering/EvioParsingFactory.cpp
+    
+    geometry/NpsGeometryService.cpp
+    calibration/fAdc250Service.cpp
+    calibration/VtpService.cpp
+    onnx/OnnxRuntimeService.cpp
+
+    evio/sro/SroBlockReader.cpp
+    evio/sro/SroFrameSetParser.cpp
+
 )
 
 # ---------- FIND REQUIRED PACKAGES -------------

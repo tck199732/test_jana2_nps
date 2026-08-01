@@ -1,16 +1,12 @@
-#include "AiVtpClusterFactory.hpp"
+#include "BaseOnnxClusterFactory.hpp"
 
 namespace nps::clustering {
 
-void AiVtpClusterFactory::Configure() {}
+void BaseOnnxClusterFactory::Configure() {}
 
-void AiVtpClusterFactory::ChangeRun(int32_t run_number) {}
+void BaseOnnxClusterFactory::ChangeRun(int32_t run_number) {}
 
-void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
-
-	if (m_rawhits().empty()) {
-		return;
-	}
+void BaseOnnxClusterFactory::Execute(int32_t run_nr, uint64_t event_index) {
 
 	auto options = m_service_onnx().createSessionOptions(m_num_threads(), m_use_cuda());
 	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), options);
@@ -49,56 +45,24 @@ void AiVtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	}
 }
 
-bool AiVtpClusterFactory::PrepareTensors(Ort::Session &session) {
+bool BaseOnnxClusterFactory::PrepareTensors(Ort::Session &session) {
 	m_input_tensors.clear();
 	m_output_tensors.clear();
 
-	try {
-		PrepareTensorInfo(session);
-	} catch (const std::exception &e) {
-		return false;
-	}
-
-	try {
-		PrepareTensorValues();
-	} catch (const std::exception &e) {
-		return false;
-	}
-	return true;
+	bool success_info = PrepareTensorInfo(session);
+	bool success_values = PrepareTensorValues();
+	return success_info && success_values;
 }
 
-void AiVtpClusterFactory::PrepareTensorValues() {
-	const auto &hits = m_rawhits();
-	const size_t n_hits = hits.size();
-
-	if (n_hits == 0) {
-		return;
-	}
-
-	// Fill x (waveforms)
-	size_t offset = 0;
-	for (size_t i = 0; i < n_hits; ++i) {
-		const auto &waveform = hits[i]->getWaveform();
-		m_input_tensors[0].fill_n(waveform.data(), offset, waveform.size());
-		offset += waveform.size();
-	}
-
-	// Fill pos (col, row per hit)
-	for (size_t i = 0; i < n_hits; ++i) {
-		auto [col, row] = m_service_geometry().getColRowFromBlock(hits[i]->getChannel());
-		const float pos[2] = {static_cast<float>(col), static_cast<float>(row)};
-		m_input_tensors[1].fill_n(pos, i * 2, 2); // 2 elements at offset i*2, no heap alloc
-	}
-
-	// Fill masks
-	m_input_tensors[2].fill(true); // all features valid (no padding)
-	m_input_tensors[3].fill(true); // all graph-nodes valid (no downsampling)
+void BaseOnnxClusterFactory::Describe() const {
+	std::string description =
+		"BaseOnnxClusterFactory: This factory uses an ONNX model to perform clustering on input data. It prepares "
+		"input and output tensors based on the model's requirements and executes inference using the ONNX Runtime.";
 }
 
-void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
+bool BaseOnnxClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 
-	const int64_t batchSize = 1;
-	const int64_t numHits = m_rawhits().size();
+	int batch_size = GetBatchSize();
 
 	Ort::AllocatorWithDefaultOptions allocator;
 
@@ -113,10 +77,10 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 		auto type = info.GetElementType();
 
 		if (shape.size() > 0 && shape[0] == -1) {
-			shape.at(0) = batchSize;
+			shape.at(0) = 1;
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
-			shape.at(1) = numHits;
+			shape.at(1) = batch_size;
 		}
 
 		for (const auto &dim : shape) {
@@ -136,10 +100,10 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 		auto type = info.GetElementType();
 
 		if (shape.size() > 0 && shape[0] == -1) {
-			shape.at(0) = batchSize;
+			shape.at(0) = 1;
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
-			shape.at(1) = numHits;
+			shape.at(1) = batch_size;
 		}
 
 		for (const auto &dim : shape) {
@@ -149,8 +113,7 @@ void AiVtpClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 		}
 		m_output_tensors.push_back(onnx::Tensor::allocate(name.get(), shape, type));
 	}
+	return true;
 }
-
-void AiVtpClusterFactory::Describe() const {}
 
 } // namespace nps::clustering

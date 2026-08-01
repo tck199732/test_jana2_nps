@@ -10,8 +10,6 @@ RandomSource::RandomSource() : JEventSource() {
 void RandomSource::Init() {
 	m_channel_dist = std::uniform_int_distribution<int>(m_channel_min(), m_channel_max());
 	m_waveform_dist = std::uniform_real_distribution<double>(m_waveform_min(), m_waveform_max());
-	m_clus_energy_dist = std::uniform_real_distribution<double>(m_clus_energy_min(), m_clus_energy_max());
-	m_clus_time_dist = std::uniform_real_distribution<double>(m_clus_time_min(), m_clus_time_max());
 }
 
 void RandomSource::Open() { std::string resource_name = GetResourceName(); }
@@ -19,33 +17,52 @@ void RandomSource::Open() { std::string resource_name = GetResourceName(); }
 void RandomSource::Close() {}
 
 JEventSource::Result RandomSource::Emit(JEvent &event) {
-
 	static size_t current_event_number = 0;
 	event.SetEventNumber(current_event_number++);
 	event.SetRunNumber(m_run_number());
 
-	std::vector<nps::RawHit *> hits;
-	for (size_t ihit = 0; ihit < m_nhits(); ihit++) {
-		auto ch = m_channel_dist(m_rng);
-		std::vector<double> signal(m_nfeatures());
-		std::generate(signal.begin(), signal.end(), [&] { return m_waveform_dist(m_rng); });
-		auto hit = new nps::RawHit(ch, std::move(signal));
-		hits.push_back(hit);
+	const std::size_t hit_count = m_nhits();
+	const std::size_t feature_count = m_nfeatures();
+
+	std::vector<nps::fadc_hit *> fadc_hits;
+	std::vector<nps::fadc_waveform *> fadc_waveforms;
+	std::vector<nps::vtp_seed *> vtp_seeds;
+
+	fadc_hits.reserve(hit_count);
+	fadc_waveforms.reserve(hit_count);
+	vtp_seeds.reserve(hit_count);
+
+	for (std::size_t ihit = 0; ihit < hit_count; ++ihit) {
+
+		std::vector<double> waveform(feature_count);
+		std::vector<double> timestamps(feature_count);
+		std::generate(waveform.begin(), waveform.end(), [this] { return m_waveform_dist(m_rng); });
+		std::iota(timestamps.begin(), timestamps.end(), 1);
+
+		const int channel = m_channel_dist(m_rng);
+		const double charge = std::accumulate(waveform.begin(), waveform.end(), 0.0);
+		const double clus_energy = charge * 0.1;
+		const double time =
+			timestamps[std::distance(waveform.begin(), std::max_element(waveform.begin(), waveform.end()))];
+
+		fadc_hits.push_back(new nps::fadc_hit{
+			.channel = channel,
+			.charge = charge,
+			.time = time,
+		});
+
+		fadc_waveforms.push_back(new nps::fadc_waveform{
+			.channel = channel,
+			.samples = std::move(waveform),
+			.timestamps = std::move(timestamps),
+		});
+
+		vtp_seeds.push_back(new nps::vtp_seed{.channel = channel, .size = 1, .time = time, .energy = clus_energy});
 	}
 
-	// transform each hit into a VtpSeed with clus size 1
-	std::vector<nps::VtpSeed *> seeds(hits.size());
-	std::transform(hits.begin(), hits.end(), seeds.begin(), [&](const nps::RawHit *hit) {
-		return new nps::VtpSeed(
-			hit->getChannel(),
-			1,						  // size
-			m_clus_time_dist(m_rng),  // time
-			m_clus_energy_dist(m_rng) // energy
-		);
-	});
-
-	event.Insert(hits, "RawHits");
-	event.Insert(seeds, "VtpSeeds");
+	event.Insert(fadc_hits, "fadc_hits");
+	event.Insert(fadc_waveforms, "fadc_waveforms");
+	event.Insert(vtp_seeds, "vtp_seeds");
 
 	return Result::Success;
 }
