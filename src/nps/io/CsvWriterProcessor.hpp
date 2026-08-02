@@ -56,7 +56,7 @@ public:
 
 	void Init() override {
 
-		m_tag = GetApplication()->GetParameterValue<std::string>("nps:output_tag");
+		m_tag = GetApplication()->GetParameterValue<std::string>("csv:output_tag");
 
 		m_vtp_filename = "vtp." + m_tag + ".csv";
 		m_wf_filename = "wf." + m_tag + ".csv";
