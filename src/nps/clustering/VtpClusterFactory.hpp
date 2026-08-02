@@ -43,8 +43,8 @@ private:
 	bool isTriggered(const nps::cluster &clus);
 	bool isMatched(const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax);
 
-	Parameter<double> m_de_thr{this, "clus:de_thr", 5.0, "Energy difference threshold for cluster matching"};
-	Parameter<double> m_tmin{this, "clus:tmin", 50.0, "Minimum time for cluster matching"};
-	Parameter<double> m_tmax{this, "clus:tmax", 370.0, "Maximum time for cluster matching"};
+	Parameter<double> m_de_thr{this, "de_thr", 5.0, "Energy difference threshold for cluster matching"};
+	Parameter<double> m_tmin{this, "tmin", 50.0, "Minimum time for cluster matching"};
+	Parameter<double> m_tmax{this, "tmax", 370.0, "Maximum time for cluster matching"};
 };
 } // namespace nps::clustering
