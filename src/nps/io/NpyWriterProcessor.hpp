@@ -71,82 +71,56 @@ public:
 		const auto &fadc_hits = m_fadc_hits();
 		const auto &vtp_clusters = m_vtp_clusters();
 
-		size_t nsamples = 0;
-		size_t max_channel = 0;
-
-		for (const auto &waveform : fadc_waveforms) {
-			nsamples = std::max(nsamples, waveform->samples.size());
-			max_channel = std::max(max_channel, static_cast<size_t>(waveform->channel));
-		}
-
-		const size_t nchannels = max_channel + 1;
-
-		const size_t max_hit_per_channel = nsamples / 8; // 32ns between hits, 4ns per sample
-
-		std::vector<double> waveform_data(nchannels * nsamples, 0.0);
-
-		std::vector<double> hit_data(
-			nchannels * 2 * max_hit_per_channel, 0.0
-		); // [nchannels][max_hits * 2] (energy, time)
-
-		std::vector<double> geometry_data(nchannels * 2, std::numeric_limits<double>::quiet_NaN());
-
-		std::vector<std::int64_t> cluster_data(nchannels, -1);
-
+		// fixed size for waveform data: [nchannels][nsamples]
+		std::vector<double> waveform_data(m_nchannels * m_nsamples, 0.0);
 		for (auto &waveform : fadc_waveforms) {
-
 			const size_t channel = static_cast<size_t>(waveform->channel);
-			if (channel >= nchannels) {
+			if (channel >= m_nchannels) {
 				throw std::runtime_error("Waveform channel index is out of bounds");
 			}
-
 			for (size_t sample = 0; sample < waveform->samples.size(); ++sample) {
-				waveform_data[channel * nsamples + sample] = static_cast<double>(waveform->samples[sample]);
+				waveform_data[channel * m_nsamples + sample] = static_cast<double>(waveform->samples[sample]);
 			}
-
-			const auto [column, row] = m_service_geometry().getColRowFromBlock(waveform->channel);
-			geometry_data[channel * 2] = static_cast<double>(column);
-			geometry_data[channel * 2 + 1] = static_cast<double>(row);
 		}
 
-		std::vector<size_t> hit_count(nchannels, 0);
+		// multiple hits per channel, hence 1 node per hit
+		std::vector<double> hit_data;
+		std::vector<double> geometry_data;
+
 		for (auto &hit : fadc_hits) {
 			const size_t channel = static_cast<size_t>(hit->channel);
-			if (channel >= nchannels) {
-				throw std::runtime_error("Waveform channel index is out of bounds");
+			if (channel >= m_nchannels) {
+				throw std::runtime_error("Hit channel index is out of bounds");
 			}
+			hit_data.push_back(static_cast<double>(hit->charge));
+			hit_data.push_back(static_cast<double>(hit->time));
 
-			size_t count = hit_count[channel];
-			if (count >= max_hit_per_channel) {
-				std::cerr << "Warning: Exceeded max hits for channel " << channel << ". Skipping additional hits."
-						  << std::endl;
-				continue;
-			}
-
-			hit_data[channel * 2 * max_hit_per_channel + count * 2] = static_cast<double>(hit->charge);
-			hit_data[channel * 2 * max_hit_per_channel + count * 2 + 1] = static_cast<double>(hit->time);
-			hit_count[channel]++;
+			const auto [column, row] = m_service_geometry().getColRowFromBlock(channel);
+			geometry_data.push_back(static_cast<double>(column));
+			geometry_data.push_back(static_cast<double>(row));
 		}
 
+		std::vector<std::int64_t> edge_index_data;
 		for (size_t cluster_index = 0; cluster_index < vtp_clusters.size(); ++cluster_index) {
-			for (const auto channel_value : vtp_clusters[cluster_index]->channels) {
-				const size_t channel = static_cast<size_t>(channel_value);
-
-				if (channel >= nchannels) {
-					throw std::runtime_error(
-						"Cluster channel " + std::to_string(channel) + " is outside the waveform channel range"
-					);
-				}
-
-				cluster_data[channel] = static_cast<std::int64_t>(cluster_index);
+			auto &channels = vtp_clusters[cluster_index]->channels;
+			auto seed_channel = channels[0];
+			for (size_t i = 1; i < channels.size(); ++i) {
+				auto channel = channels[i];
+				edge_index_data.push_back(static_cast<std::int64_t>(seed_channel));
+				edge_index_data.push_back(static_cast<std::int64_t>(channel));
 			}
 		}
+		size_t num_edges = edge_index_data.size() / 2;
 
-		cnpy::npy_save(output_dir / "waveforms.npy", waveform_data.data(), {nchannels, nsamples});
-		cnpy::npy_save(output_dir / "hits.npy", hit_data.data(), {nchannels, max_hit_per_channel * 2});
-		cnpy::npy_save(output_dir / "geometry.npy", geometry_data.data(), {nchannels, 2});
-		cnpy::npy_save(output_dir / "clusters.npy", cluster_data.data(), {nchannels});
+		cnpy::npy_save(output_dir / "waveforms.npy", waveform_data.data(), {m_nchannels, m_nsamples});
+		cnpy::npy_save(output_dir / "hits.npy", hit_data.data(), {fadc_hits.size(), 2});
+		cnpy::npy_save(output_dir / "geometry.npy", geometry_data.data(), {fadc_hits.size(), 2});
+		cnpy::npy_save(output_dir / "edge_index.npy", edge_index_data.data(), {2, num_edges});
 	}
+
+protected:
+	size_t m_nsamples = 110;
+	size_t m_nchannels = 1080;
 };
 
 } // namespace nps::io
