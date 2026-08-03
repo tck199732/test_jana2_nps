@@ -24,6 +24,7 @@ public:
 	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms"}};
 	Input<nps::vtp_seed> m_vtp_seeds{this, {"vtp_seeds"}};
 	Output<nps::cluster> m_clusters{this, "vtp_clusters"};
+	Output<nps::fadc_hit> m_fadc_hits{this, "fadc_hits"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 	Service<nps::calib::VtpService> m_service_vtp{this};
@@ -35,11 +36,11 @@ public:
 
 private:
 	// for processing fAdc signals
-	void processRawWaveform(const nps::fadc_waveform &waveform, std::vector<nps::fadc_hit> &hits);
+	void processRawWaveform(const nps::fadc_waveform *waveform, std::vector<nps::fadc_hit *> &hits);
 	std::vector<int> findPulses(const std::vector<double> &waveform_adc, double thr, int clk) const;
 
 	// process vtp clusterization
-	std::vector<nps::cluster> selectGridCandidate(const std::vector<nps::fadc_hit> &hits);
+	std::vector<nps::cluster> selectGridCandidate(const std::vector<nps::fadc_hit *> &hits);
 	bool isTriggered(const nps::cluster &clus);
 	bool isMatched(const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax);
 

@@ -10,17 +10,14 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
 	const auto &waveforms = m_fadc_waveforms();
 	const auto &seeds = m_vtp_seeds();
-
-	// find all hits for each waveform
-	std::vector<nps::fadc_hit> fadc_hits;
-	fadc_hits.reserve(waveforms.size());
+	auto &fadc_hits = m_fadc_hits();
 
 	for (const auto *waveform_ptr : waveforms) {
 		if (waveform_ptr == nullptr) {
 			continue;
 		}
 
-		processRawWaveform(*waveform_ptr, fadc_hits);
+		processRawWaveform(waveform_ptr, m_fadc_hits());
 	}
 
 	// vtp clusterization
@@ -57,12 +54,12 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	}
 }
 
-void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform &waveform, std::vector<nps::fadc_hit> &hits) {
+void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform *waveform, std::vector<nps::fadc_hit *> &hits) {
 
 	const auto &cfg = m_service_fadc().getConfig(); // get the latest config in case it was updated at runtime
 
-	const int channel = waveform.channel;
-	const auto &samples = waveform.samples;
+	const int channel = waveform->channel;
+	const auto &samples = waveform->samples;
 
 	auto clk = cfg.clock_cycles;
 	auto dt = cfg.time_interval;
@@ -89,13 +86,11 @@ void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform &waveform, s
 		charge = static_cast<int>(charge * gain * 256.0 / 256.0);
 		charge = std::max(0, std::min(8191, charge));
 
-		hits.emplace_back(
-			nps::fadc_hit{
-				.channel = static_cast<int>(channel),
-				.charge = static_cast<double>(charge),
-				.time = static_cast<double>(t),
-			}
-		);
+		hits.emplace_back(new nps::fadc_hit{
+			.channel = static_cast<int>(channel),
+			.charge = static_cast<double>(charge),
+			.time = static_cast<double>(t),
+		});
 	}
 }
 
@@ -126,7 +121,7 @@ std::vector<int> VtpClusterFactory::findPulses(const std::vector<double> &wavefo
 	return res;
 }
 
-std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fadc_hit> &hits) {
+std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fadc_hit *> &hits) {
 
 	const auto &vtp_cfg = m_service_vtp().getConfig();
 	const auto &fadc_cfg = m_service_fadc().getConfig();
@@ -135,18 +130,18 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 	candidates.reserve(hits.size()); // number of hits >= number of clusters
 
 	for (std::size_t i = 0; i < hits.size(); ++i) {
-		const auto &hit = hits[i];
+		const auto *hit = hits[i];
 
 		nps::cluster candidate;
 		candidate.channels.reserve(9);
 		candidate.energies.reserve(9);
 		candidate.times.reserve(9);
 
-		candidate.channels.push_back(hit.channel);
-		candidate.energies.push_back(hit.charge);
-		candidate.times.push_back(hit.time);
+		candidate.channels.push_back(hit->channel);
+		candidate.energies.push_back(hit->charge);
+		candidate.times.push_back(hit->time);
 
-		const auto it = vtp_cfg.cluster_hit_dt.find(hit.channel);
+		const auto it = vtp_cfg.cluster_hit_dt.find(hit->channel);
 		if (it == vtp_cfg.cluster_hit_dt.end()) {
 			continue; // or throw an exception
 		}
@@ -157,15 +152,15 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 				continue;
 			}
 
-			const auto &neighbor_hit = hits[j];
-			if (std::abs(neighbor_hit.time - hit.time) > clus_dt) {
+			const auto *neighbor_hit = hits[j];
+			if (std::abs(neighbor_hit->time - hit->time) > clus_dt) {
 				continue;
 			}
 
-			if (m_service_geometry().isInsideGrid(hit.channel, neighbor_hit.channel, 3)) {
-				candidate.channels.push_back(neighbor_hit.channel);
-				candidate.energies.push_back(neighbor_hit.charge);
-				candidate.times.push_back(neighbor_hit.time);
+			if (m_service_geometry().isInsideGrid(hit->channel, neighbor_hit->channel, 3)) {
+				candidate.channels.push_back(neighbor_hit->channel);
+				candidate.energies.push_back(neighbor_hit->charge);
+				candidate.times.push_back(neighbor_hit->time);
 			}
 		}
 		candidates.emplace_back(std::move(candidate));
