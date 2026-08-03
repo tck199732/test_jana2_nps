@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
 		vtpClusterGenerator->AddWiring(
 			"VtpClusterFactory",			 // tag
 			{"fadc_waveforms", "vtp_seeds"}, // inputs
-			{"vtp_clusters"}				 // outputs
+			{"fadc_hits", "vtp_clusters"}	 // outputs
 		);
 		app.Add(vtpClusterGenerator);
 	}
@@ -155,9 +155,9 @@ int main(int argc, char *argv[]) {
 	if (enableWaveformClustering) {
 		auto WaveformClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::WaveformClusterFactory>();
 		WaveformClusterGenerator->AddWiring(
-			"WaveformClusterFactory",		   // tag
-			{"fadc_waveforms"},				   // inputs
-			{"fadc_hits", "waveform_clusters"} // outputs
+			"WaveformClusterFactory", // tag
+			{"fadc_waveforms"},		  // inputs
+			{"waveform_clusters"}	  // outputs
 		);
 		app.Add(WaveformClusterGenerator);
 	}
