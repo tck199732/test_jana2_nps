@@ -21,6 +21,7 @@
 
 #include "clustering/EvioParsingFactory.hpp"
 #include "clustering/HitClusterFactory.hpp"
+#include "clustering/OcInferenceFactory.hpp"
 #include "clustering/VtpClusterFactory.hpp"
 #include "clustering/WaveformClusterFactory.hpp"
 
@@ -150,6 +151,7 @@ int main(int argc, char *argv[]) {
 			{"fadc_hits", "vtp_clusters"}	 // outputs
 		);
 		app.Add(vtpClusterGenerator);
+		app.Add(new nps::io::VtpClusterNpyWriteProcessor());
 	}
 
 	if (enableWaveformClustering) {
@@ -167,7 +169,7 @@ int main(int argc, char *argv[]) {
 		HitClusterGenerator->AddWiring(
 			"HitClusterFactory", // tag
 			{"fadc_hits"},		 // inputs
-			{"hit_clusters"}	 // outputs
+			{"oc_heads"}		 // outputs
 		);
 		app.Add(HitClusterGenerator);
 	}
@@ -175,15 +177,22 @@ int main(int argc, char *argv[]) {
 	if (enableWaveformClustering || enableHitClustering) {
 		auto EvioParsingGenerator = new JOmniFactoryGeneratorT<nps::clustering::EvioParsingFactory>();
 		EvioParsingGenerator->AddWiring(
-			"EvioParsingFactory",			// tag
-			{"sro_block_data"},				// inputs
-			{"fadc_hits", "fadc_waveforms"} // outputs
+			"EvioParsingFactory",	  // tag
+			{"sro_block_data"},		  // inputs
+			{"fadc_hits", "oc_heads"} // outputs
 		);
 		app.Add(EvioParsingGenerator);
+
+		auto OcInferenceGenerator = new JOmniFactoryGeneratorT<nps::clustering::OcInferenceFactory>();
+		OcInferenceGenerator->AddWiring(
+			"OcInferenceFactory", // tag
+			{"oc_heads"},		  // inputs
+			{"clusters"}		  // outputs
+		);
+		app.Add(OcInferenceGenerator);
 	}
 
 	app.Add(new nps::io::CsvWriterProcessor());
-	app.Add(new nps::io::VtpClusterNpyWriteProcessor());
 
 	app.Initialize();
 	app.Run();

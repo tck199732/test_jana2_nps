@@ -44,6 +44,7 @@ add_executable(nps_onnx_app
     clustering/HitClusterFactory.cpp
     clustering/VtpClusterFactory.cpp
     clustering/EvioParsingFactory.cpp
+    clustering/OcInferenceFactory.cpp
     
     geometry/NpsGeometryService.cpp
     calibration/fAdc250Service.cpp
