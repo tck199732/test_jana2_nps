@@ -86,18 +86,20 @@ public:
 		// multiple hits per channel, hence 1 node per hit
 		std::vector<double> hit_data;
 		std::vector<double> geometry_data;
+		hit_data.reserve(fadc_hits.size() * 2);		 // charge, time
+		geometry_data.reserve(fadc_hits.size() * 2); // column, row
 
 		for (auto &hit : fadc_hits) {
 			const size_t channel = static_cast<size_t>(hit->channel);
 			if (channel >= m_nchannels) {
 				throw std::runtime_error("Hit channel index is out of bounds");
 			}
-			hit_data.push_back(static_cast<double>(hit->charge));
-			hit_data.push_back(static_cast<double>(hit->time));
+			hit_data.emplace_back(static_cast<double>(hit->charge));
+			hit_data.emplace_back(static_cast<double>(hit->time));
 
 			const auto [column, row] = m_service_geometry().getColRowFromBlock(channel);
-			geometry_data.push_back(static_cast<double>(column));
-			geometry_data.push_back(static_cast<double>(row));
+			geometry_data.emplace_back(static_cast<double>(column));
+			geometry_data.emplace_back(static_cast<double>(row));
 		}
 
 		std::vector<std::int64_t> edge_index_data;
@@ -110,12 +112,19 @@ public:
 				edge_index_data.push_back(static_cast<std::int64_t>(channel));
 			}
 		}
-		size_t num_edges = edge_index_data.size() / 2;
+
+		std::vector<std::int64_t> cluster_data(fadc_hits.size(), -1);
+		for (size_t cluster_index = 0; cluster_index < vtp_clusters.size(); ++cluster_index) {
+			for (size_t hit_index : vtp_clusters[cluster_index]->hit_indices) {
+				cluster_data[hit_index] = cluster_index;
+			}
+		}
 
 		cnpy::npy_save(output_dir / "waveforms.npy", waveform_data.data(), {m_nchannels, m_nsamples});
 		cnpy::npy_save(output_dir / "hits.npy", hit_data.data(), {fadc_hits.size(), 2});
 		cnpy::npy_save(output_dir / "geometry.npy", geometry_data.data(), {fadc_hits.size(), 2});
-		cnpy::npy_save(output_dir / "edge_index.npy", edge_index_data.data(), {2, num_edges});
+		cnpy::npy_save(output_dir / "edge_index.npy", edge_index_data.data(), {2, edge_index_data.size() / 2});
+		cnpy::npy_save(output_dir / "clusters.npy", cluster_data.data(), {fadc_hits.size()});
 	}
 
 protected:
