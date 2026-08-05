@@ -10,18 +10,28 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
 	const auto &waveforms = m_fadc_waveforms();
 	const auto &seeds = m_vtp_seeds();
-	auto &fadc_hits = m_fadc_hits();
 
-	for (const auto *waveform_ptr : waveforms) {
-		if (waveform_ptr == nullptr) {
-			continue;
+	if (m_use_waveform()) {
+
+		for (const auto *waveform_ptr : waveforms) {
+			if (waveform_ptr == nullptr) {
+				continue;
+			}
+			processRawWaveform(waveform_ptr, m_output_fadc_hits());
 		}
 
-		processRawWaveform(waveform_ptr, m_fadc_hits());
+	} else {
+
+		for (const auto *hit_ptr : m_input_fadc_hits()) {
+			if (hit_ptr == nullptr) {
+				continue;
+			}
+			m_output_fadc_hits().push_back(new nps::fadc_hit(*hit_ptr));
+		}
 	}
 
 	// vtp clusterization
-	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits);
+	std::vector<nps::cluster> candidates = selectGridCandidate(m_output_fadc_hits());
 	std::vector<nps::cluster> reco_clusters;
 	reco_clusters.reserve(candidates.size());
 	for (auto &candidate : candidates) {
@@ -30,24 +40,35 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 		}
 	}
 
-	auto &output_clusters = m_clusters();
+	if (m_match_seed()) {
+		populateMatchingClusters(reco_clusters, seeds, m_clusters());
+	} else {
+		for (auto &cluster : reco_clusters) {
+			m_clusters().push_back(new nps::cluster(std::move(cluster)));
+		}
+	}
+}
 
-	// compare with VTP seeds and fill the matched clusters
-	std::vector<bool> reco_used(reco_clusters.size(), false);
+void VtpClusterFactory::populateMatchingClusters(
+	std::vector<nps::cluster> &clusters, const std::vector<const nps::vtp_seed *> &seeds,
+	std::vector<nps::cluster *> &output_clusters
+) {
+
+	std::vector<bool> reco_used(clusters.size(), false);
 	for (const auto *seed_ptr : seeds) {
 		if (seed_ptr == nullptr) {
 			continue;
 		}
 		const auto &seed = *seed_ptr;
 
-		for (size_t i = 0; i < reco_clusters.size(); i++) {
+		for (size_t i = 0; i < clusters.size(); i++) {
 			if (reco_used[i]) {
 				continue;
 			}
-			auto match = isMatched(reco_clusters[i], seed, m_de_thr(), m_tmin(), m_tmax());
+			auto match = isMatched(clusters[i], seed, m_de_thr(), m_tmin(), m_tmax());
 			if (match) {
 				reco_used[i] = true;
-				output_clusters.push_back(new nps::cluster(std::move(reco_clusters[i])));
+				output_clusters.push_back(new nps::cluster(std::move(clusters[i])));
 				break; // Move to the next seed after a match
 			}
 		}
@@ -133,11 +154,13 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 		const auto *hit = hits[i];
 
 		nps::cluster candidate;
-		candidate.channels.reserve(9);
-		candidate.energies.reserve(9);
-		candidate.times.reserve(9);
+		candidate.channels.reserve(m_grid_size());
+		candidate.hit_indices.reserve(m_grid_size());
+		candidate.energies.reserve(m_grid_size());
+		candidate.times.reserve(m_grid_size());
 
 		candidate.channels.push_back(hit->channel);
+		candidate.hit_indices.push_back(i);
 		candidate.energies.push_back(hit->charge);
 		candidate.times.push_back(hit->time);
 
@@ -157,8 +180,9 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 				continue;
 			}
 
-			if (m_service_geometry().isInsideGrid(hit->channel, neighbor_hit->channel, 3)) {
+			if (m_service_geometry().isInsideGrid(hit->channel, neighbor_hit->channel, m_grid_size())) {
 				candidate.channels.push_back(neighbor_hit->channel);
+				candidate.hit_indices.push_back(j);
 				candidate.energies.push_back(neighbor_hit->charge);
 				candidate.times.push_back(neighbor_hit->time);
 			}
@@ -200,6 +224,12 @@ bool VtpClusterFactory::isTriggered(const nps::cluster &clus) {
 			return false;
 		}
 	}
+
+	auto total_e = std::accumulate(energies.begin(), energies.end(), 0.0);
+	if (total_e < cluster_thr) {
+		return false;
+	}
+
 	return true;
 }
 
