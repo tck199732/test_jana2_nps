@@ -9,8 +9,6 @@ void VtpClusterFactory::ChangeRun(int32_t run_number) {}
 void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
 	const auto &waveforms = m_fadc_waveforms();
-	const auto &seeds = m_vtp_seeds();
-
 	if (m_use_waveform()) {
 
 		for (const auto *waveform_ptr : waveforms) {
@@ -41,7 +39,7 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	}
 
 	if (m_match_seed()) {
-		populateMatchingClusters(reco_clusters, seeds, m_clusters());
+		populateMatchingClusters(reco_clusters, m_vtp_seeds(), m_clusters());
 	} else {
 		for (auto &cluster : reco_clusters) {
 			m_clusters().push_back(new nps::cluster(std::move(cluster)));
@@ -154,10 +152,11 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 		const auto *hit = hits[i];
 
 		nps::cluster candidate;
-		candidate.channels.reserve(m_grid_size());
-		candidate.hit_indices.reserve(m_grid_size());
-		candidate.energies.reserve(m_grid_size());
-		candidate.times.reserve(m_grid_size());
+		int nch = m_grid_size() * m_grid_size();
+		candidate.channels.reserve(nch);
+		candidate.hit_indices.reserve(nch);
+		candidate.energies.reserve(nch);
+		candidate.times.reserve(nch);
 
 		candidate.channels.push_back(hit->channel);
 		candidate.hit_indices.push_back(i);
