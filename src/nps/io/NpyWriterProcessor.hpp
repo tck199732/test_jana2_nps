@@ -55,7 +55,7 @@ public:
 
 class VtpClusterNpyWriteProcessor : public BaseNpyWriterProcessor {
 	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms", JEventLevel::None, true}};
-	Input<nps::fadc_hit> m_fadc_hits{this, {"fadc_hits", JEventLevel::None, true}};
+	Input<nps::fadc_hit> m_fadc_hits{this, {"input_fadc_hits", JEventLevel::None, true}};
 	Input<nps::cluster> m_vtp_clusters{this, {"vtp_clusters", JEventLevel::None, true}};
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 
@@ -71,15 +71,18 @@ public:
 		const auto &fadc_hits = m_fadc_hits();
 		const auto &vtp_clusters = m_vtp_clusters();
 
-		// fixed size for waveform data: [nchannels][nsamples]
-		std::vector<double> waveform_data(m_nchannels * m_nsamples, 0.0);
-		for (auto &waveform : fadc_waveforms) {
-			const size_t channel = static_cast<size_t>(waveform->channel);
+		// for convenience, waveforms are stored as [nhits][nsamples]
+		//  i.e. data could be repeated for multiple hits
+		std::vector<double> waveform_data(fadc_hits.size() * m_nsamples, 0.0);
+		for (size_t i = 0; i < fadc_hits.size(); ++i) {
+			const auto &hit = fadc_hits[i];
+			const size_t channel = static_cast<size_t>(hit->channel);
 			if (channel >= m_nchannels) {
-				throw std::runtime_error("Waveform channel index is out of bounds");
+				throw std::runtime_error("Hit channel index is out of bounds");
 			}
-			for (size_t sample = 0; sample < waveform->samples.size(); ++sample) {
-				waveform_data[channel * m_nsamples + sample] = static_cast<double>(waveform->samples[sample]);
+			for (size_t sample = 0; sample < fadc_waveforms[channel]->samples.size(); ++sample) {
+				waveform_data[channel * m_nsamples + sample] =
+					static_cast<double>(fadc_waveforms[channel]->samples[sample]);
 			}
 		}
 
