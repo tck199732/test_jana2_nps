@@ -32,9 +32,16 @@ JEventSource::Result ReplaySource::Emit(JEvent &event) {
 	std::vector<std::vector<double>> signals; // [nblocks][ntime]
 	std::vector<int> blocks;				  // [nblocks]
 
-	auto signalFlag = unpackWaveform(
-		m_buffer.Ndata_NPS_cal_fly_adcSampWaveform, MAX_BLOCKS, m_buffer.NPS_cal_fly_adcSampWaveform, blocks, signals
-	);
+	try {
+		unpackWaveform(
+			m_buffer.Ndata_NPS_cal_fly_adcSampWaveform, MAX_BLOCKS, m_buffer.NPS_cal_fly_adcSampWaveform, blocks,
+			signals
+		);
+	} catch (const std::exception &e) {
+		std::cerr << "Error unpacking waveform data for event " << event.GetEventNumber() << ": " << e.what()
+				  << std::endl;
+		return Result::FailureFinished;
+	}
 
 	std::vector<nps::fadc_waveform *> waveforms;
 	std::vector<nps::vtp_seed *> seeds;
@@ -94,14 +101,15 @@ std::string ReplaySource::GetDescription() {
 	return ss.str();
 }
 
-int unpackWaveform(
+void unpackWaveform(
 	int NSampWaveForm, int max_blocks, std::span<const double> SampWaveForm, std::vector<int> &blocks,
 	std::vector<std::vector<double>> &signals
 ) {
 	if (NSampWaveForm > MAX_DATA) {
-		std::cerr << "Error: NSampWaveForm (" << NSampWaveForm << ") exceeds the size of the input buffer (" << MAX_DATA
-				  << "). Cannot read signal.\n";
-		return 1;
+		const std::string error_message = "Error: NSampWaveForm (" + std::to_string(NSampWaveForm) +
+										  ") exceeds the size of the input buffer (" + std::to_string(MAX_DATA) +
+										  "). Cannot read signal.";
+		throw std::runtime_error(error_message);
 	}
 
 	signals.clear();
@@ -124,10 +132,11 @@ int unpackWaveform(
 			break;
 		}
 
-		if (bloc == 2000)
+		if (bloc == 2000) {
 			bloc = 1080;
-		else if (bloc == 2001)
+		} else if (bloc == 2001) {
 			bloc = 1081;
+		}
 
 		if (bloc < 0 || bloc >= max_blocks || block_seen.count(bloc)) {
 			ns += nsamp;
@@ -139,18 +148,18 @@ int unpackWaveform(
 
 		std::vector<double> sig;
 		sig.reserve(nsamp);
-		for (int it = 0; it < nsamp; ++it)
+		for (int it = 0; it < nsamp; ++it) {
 			sig.emplace_back(SampWaveForm[ns++]);
+		}
 
 		signals.emplace_back(std::move(sig));
 	}
 
 	if (signals.size() != blocks.size()) {
-		std::cerr << "Error: Mismatch between number of blocks (" << blocks.size() << ") and number of signals ("
-				  << signals.size() << ").\n";
-		return 1;
+		const std::string error_message = "Error: Mismatch between number of blocks (" + std::to_string(blocks.size()) +
+										  ") and number of signals (" + std::to_string(signals.size()) + ").";
+		throw std::runtime_error(error_message);
 	}
-	return 0;
 }
 
 void setBranchAddresses(TChain *chain, npsBranches &buffer) {

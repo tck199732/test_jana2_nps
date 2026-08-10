@@ -205,7 +205,7 @@ struct npsBranches {
 };
 
 void setBranchAddresses(TChain *chain, npsBranches &buffer);
-int unpackWaveform(
+void unpackWaveform(
 	int NSampWaveForm, int max_blocks, std::span<const double> SampWaveForm, std::vector<int> &blocks,
 	std::vector<std::vector<double>> &signals
 );
