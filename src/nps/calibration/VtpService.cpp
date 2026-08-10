@@ -86,9 +86,8 @@ bool VtpService::Load(const std::string &filename) {
 		m_config.firmware_ver[ch] = std::stoi(values[col_idx["VTP_FIRMWAREVERSION"]]);
 		m_config.offset[ch] = std::stoi(values[col_idx["VTP_W_OFFSET"]]);
 		m_config.width[ch] = std::stoi(values[col_idx["VTP_W_WIDTH"]]);
-		// m_config.cluster_hit_dt[ch] = std::stoi(values[col_idx["VTP_NPS_ECALCLUSTER_HIT_DT"]]) * mDeltaT;
 		m_config.cluster_hit_dt[ch] =
-			std::stoi(values[col_idx["VTP_NPS_ECALCLUSTER_HIT_DT"]]); // multiply dt elsewhere !
+			std::stoi(values[col_idx["VTP_NPS_ECALCLUSTER_HIT_DT"]]); // in units of time samples
 
 		m_config.cluster_seed_thr[ch] = std::stoi(values[col_idx["VTP_NPS_ECALCLUSTER_SEED_THR"]]);
 		m_config.cluster_nhits_min[ch] = std::stoi(values[col_idx["VTP_NPS_ECALCLUSTER_NHIT_MIN"]]);
