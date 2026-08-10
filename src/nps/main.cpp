@@ -146,10 +146,11 @@ int main(int argc, char *argv[]) {
 	if (enableVtpClustering) {
 		auto vtpClusterGenerator = new JOmniFactoryGeneratorT<nps::clustering::VtpClusterFactory>();
 		vtpClusterGenerator->AddWiring(
-			"VtpClusterFactory",								// tag
-			{"fadc_waveforms", "vtp_seeds", "input_fadc_hits"}, // inputs
-			{"output_fadc_hits", "vtp_clusters"}				// outputs
+			"VtpClusterFactory",						  // tag
+			{"fadc_waveforms", "fadc_hits", "vtp_seeds"}, // inputs
+			{"vtp_clusters"}							  // outputs
 		);
+
 		app.Add(vtpClusterGenerator);
 		app.Add(new nps::io::VtpClusterNpyWriteProcessor());
 	}
