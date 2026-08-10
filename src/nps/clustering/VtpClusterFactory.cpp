@@ -28,19 +28,30 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	}
 
 	// vtp clusterization
-	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits); // simulate vtp fpga
-	std::vector<nps::cluster> trg_clusters;								   // triggered clusters
-	trg_clusters.reserve(candidates.size());
+	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits); // spacetime grids
+	std::vector<nps::cluster> seed_clusters;							   // seed clusters
+	seed_clusters.reserve(candidates.size());
 
-	std::vector<int> used_hits_counter(fadc_hits.size(), 0);
 	for (auto &candidate : candidates) {
-		if (isTriggered(candidate)) {
-			trg_clusters.emplace_back(std::move(candidate));
+		if (isSeed(candidate)) {
+
+			if (m_match_seed()) {
+				populateMatchingClusters(candidates, seed_clusters, m_vtp_seeds());
+			} else {
+				seed_clusters.emplace_back(std::move(candidate));
+			}
 		}
 	}
 
-	for (auto &cluster : trg_clusters) {
-		for (const auto &hit_index : cluster.hit_indices) {
+	for (auto &seed : seed_clusters) {
+		if (isTriggered(seed)) {
+			m_clusters().push_back(new nps::cluster(std::move(seed)));
+		}
+	}
+
+	std::vector<int> used_hits_counter(fadc_hits.size(), 0);
+	for (const auto *ptr : m_clusters()) {
+		for (const auto &hit_index : ptr->hit_indices) {
 			used_hits_counter[hit_index]++;
 		}
 	}
@@ -51,7 +62,6 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 			continue;
 		}
 		if (used_hits_counter[hit_index] > 1) {
-			// throw std::runtime_error("Error: A hit is used in multiple clusters, which should not happen.");
 			continue;
 		}
 		const auto &hit = fadc_hits[hit_index];
@@ -63,19 +73,10 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 			.times = {hit.time}
 		});
 	}
-
-	if (m_match_seed()) {
-		// if a cluster is triggered but does not match vtp seed, it will be excluded instead of treated as background
-		populateMatchingClusters(trg_clusters, m_clusters(), m_vtp_seeds());
-	} else {
-		for (auto &cluster : trg_clusters) {
-			m_clusters().push_back(new nps::cluster(std::move(cluster)));
-		}
-	}
 }
 
 void VtpClusterFactory::populateMatchingClusters(
-	std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster *> &out_clusters,
+	std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster> &out_clusters,
 	const std::vector<const nps::vtp_seed *> &seeds
 ) {
 
@@ -101,7 +102,7 @@ void VtpClusterFactory::populateMatchingClusters(
 	for (size_t i = 0; i < in_clusters.size(); i++) {
 		if (reco_used[i]) {
 			in_clusters[i].id = cluster_id++;
-			out_clusters.push_back(new nps::cluster(std::move(in_clusters[i])));
+			out_clusters.push_back(std::move(in_clusters[i]));
 		}
 	}
 }
@@ -132,11 +133,12 @@ void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform *waveform, s
 
 		// pedestal subtraction
 		auto ped_sub = static_cast<int>(ped * nsamples + (0.001 * nsamples));
-		auto charge = static_cast<int>(raw_sum) - ped_sub;
+		auto charge = static_cast<double>(static_cast<int>(raw_sum) - ped_sub);
 
 		// apply gain and saturation
-		charge = static_cast<int>(charge * gain * 256.0 / 256.0);
-		charge = std::max(0, std::min(8191, charge));
+		auto scaled_gain = static_cast<int>(gain * 256.0);
+		charge = static_cast<double>(static_cast<int>(charge * scaled_gain) / 256.0);
+		charge = std::max(0.0, std::min(8191.0, charge));
 
 		hits.emplace_back(
 			nps::fadc_hit{
@@ -228,6 +230,29 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 	return candidates;
 }
 
+bool VtpClusterFactory::isSeed(const nps::cluster &clus) {
+	const auto &cfg = m_service_vtp().getConfig();
+	const auto &channels = clus.channels;
+	const auto &energies = clus.energies;
+	const auto &times = clus.times;
+
+	auto ch_seed = channels[0]; // first hit is the seed
+	auto seed_thr = cfg.cluster_seed_thr.at(ch_seed);
+
+	// seed energy requirement
+	if (energies[0] < seed_thr) {
+		return false;
+	}
+
+	// local maximum requirement
+	for (int i = 1; i < energies.size(); i++) {
+		if (energies[i] > energies[0]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool VtpClusterFactory::isTriggered(const nps::cluster &clus) {
 	const auto &cfg = m_service_vtp().getConfig();
 
@@ -246,18 +271,6 @@ bool VtpClusterFactory::isTriggered(const nps::cluster &clus) {
 	// minimum number of hits
 	if (size < min_hits) {
 		return false;
-	}
-
-	// seed energy threshold
-	if (energies[0] < seed_thr) {
-		return false;
-	}
-
-	// local maximum requirement
-	for (int i = 1; i < energies.size(); i++) {
-		if (energies[i] > energies[0]) {
-			return false;
-		}
 	}
 
 	auto total_e = std::accumulate(energies.begin(), energies.end(), 0.0);

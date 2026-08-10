@@ -41,12 +41,13 @@ private:
 	std::vector<int> findPulses(const std::vector<double> &waveform_adc, double thr, int clk) const;
 
 	void populateMatchingClusters(
-		std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster *> &out_clusters,
+		std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster> &out_clusters,
 		const std::vector<const nps::vtp_seed *> &seeds
 	);
 
 	// process vtp clusterization
 	std::vector<nps::cluster> selectGridCandidate(const std::vector<nps::fadc_hit> &hits);
+	bool isSeed(const nps::cluster &clus);
 	bool isTriggered(const nps::cluster &clus);
 	bool isMatched(const nps::cluster &clus, const nps::vtp_seed &seed, double de_thr, double tmin, double tmax);
 
