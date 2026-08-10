@@ -8,72 +8,105 @@ void VtpClusterFactory::ChangeRun(int32_t run_number) {}
 
 void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 
-	const auto &waveforms = m_fadc_waveforms();
-	if (m_use_waveform()) {
+	std::vector<nps::fadc_hit> fadc_hits;
 
-		for (const auto *waveform_ptr : waveforms) {
+	if (m_use_waveform()) {
+		for (const auto *waveform_ptr : m_fadc_waveforms()) {
 			if (waveform_ptr == nullptr) {
 				continue;
 			}
-			processRawWaveform(waveform_ptr, m_output_fadc_hits());
+			processRawWaveform(waveform_ptr, fadc_hits);
 		}
 
 	} else {
-
 		for (const auto *hit_ptr : m_input_fadc_hits()) {
 			if (hit_ptr == nullptr) {
 				continue;
 			}
-			m_output_fadc_hits().push_back(new nps::fadc_hit(*hit_ptr));
+			fadc_hits.push_back(*hit_ptr);
 		}
 	}
 
 	// vtp clusterization
-	std::vector<nps::cluster> candidates = selectGridCandidate(m_output_fadc_hits());
-	std::vector<nps::cluster> reco_clusters;
-	reco_clusters.reserve(candidates.size());
+	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits); // simulate vtp fpga
+	std::vector<nps::cluster> trg_clusters;								   // triggered clusters
+	trg_clusters.reserve(candidates.size());
+
+	std::vector<int> used_hits_counter(fadc_hits.size(), 0);
 	for (auto &candidate : candidates) {
 		if (isTriggered(candidate)) {
-			reco_clusters.emplace_back(std::move(candidate));
+			trg_clusters.emplace_back(std::move(candidate));
 		}
 	}
 
+	for (auto &cluster : trg_clusters) {
+		for (const auto &hit_index : cluster.hit_indices) {
+			used_hits_counter[hit_index]++;
+		}
+	}
+
+	// unused hits form dummy clusters with id = -1
+	for (size_t hit_index = 0; hit_index < used_hits_counter.size(); ++hit_index) {
+		if (used_hits_counter[hit_index] > 0) {
+			continue;
+		}
+		if (used_hits_counter[hit_index] > 1) {
+			// throw std::runtime_error("Error: A hit is used in multiple clusters, which should not happen.");
+			continue;
+		}
+		const auto &hit = fadc_hits[hit_index];
+		m_clusters().push_back(new nps::cluster{
+			.id = -1,
+			.channels = {hit.channel},
+			.hit_indices = {static_cast<int>(hit_index)},
+			.energies = {hit.charge},
+			.times = {hit.time}
+		});
+	}
+
 	if (m_match_seed()) {
-		populateMatchingClusters(reco_clusters, m_vtp_seeds(), m_clusters());
+		// if a cluster is triggered but does not match vtp seed, it will be excluded instead of treated as background
+		populateMatchingClusters(trg_clusters, m_clusters(), m_vtp_seeds());
 	} else {
-		for (auto &cluster : reco_clusters) {
+		for (auto &cluster : trg_clusters) {
 			m_clusters().push_back(new nps::cluster(std::move(cluster)));
 		}
 	}
 }
 
 void VtpClusterFactory::populateMatchingClusters(
-	std::vector<nps::cluster> &clusters, const std::vector<const nps::vtp_seed *> &seeds,
-	std::vector<nps::cluster *> &output_clusters
+	std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster *> &out_clusters,
+	const std::vector<const nps::vtp_seed *> &seeds
 ) {
 
-	std::vector<bool> reco_used(clusters.size(), false);
+	std::vector<bool> reco_used(in_clusters.size(), false); // which cluster to be populated
 	for (const auto *seed_ptr : seeds) {
 		if (seed_ptr == nullptr) {
 			continue;
 		}
-		const auto &seed = *seed_ptr;
 
-		for (size_t i = 0; i < clusters.size(); i++) {
+		for (size_t i = 0; i < in_clusters.size(); i++) {
 			if (reco_used[i]) {
 				continue;
 			}
-			auto match = isMatched(clusters[i], seed, m_de_thr(), m_tmin(), m_tmax());
-			if (match) {
+			if (isMatched(in_clusters[i], *seed_ptr, m_de_thr(), m_tmin(), m_tmax())) {
 				reco_used[i] = true;
-				output_clusters.push_back(new nps::cluster(std::move(clusters[i])));
 				break; // Move to the next seed after a match
 			}
 		}
 	}
+
+	// cluster index reset to (0, n-1) for the output clusters
+	int cluster_id = 0;
+	for (size_t i = 0; i < in_clusters.size(); i++) {
+		if (reco_used[i]) {
+			in_clusters[i].id = cluster_id++;
+			out_clusters.push_back(new nps::cluster(std::move(in_clusters[i])));
+		}
+	}
 }
 
-void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform *waveform, std::vector<nps::fadc_hit *> &hits) {
+void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform *waveform, std::vector<nps::fadc_hit> &hits) {
 
 	const auto &cfg = m_service_fadc().getConfig(); // get the latest config in case it was updated at runtime
 
@@ -105,11 +138,13 @@ void VtpClusterFactory::processRawWaveform(const nps::fadc_waveform *waveform, s
 		charge = static_cast<int>(charge * gain * 256.0 / 256.0);
 		charge = std::max(0, std::min(8191, charge));
 
-		hits.emplace_back(new nps::fadc_hit{
-			.channel = static_cast<int>(channel),
-			.charge = static_cast<double>(charge),
-			.time = static_cast<double>(t),
-		});
+		hits.emplace_back(
+			nps::fadc_hit{
+				.channel = static_cast<int>(channel),
+				.charge = static_cast<double>(charge),
+				.time = static_cast<double>(t),
+			}
+		);
 	}
 }
 
@@ -140,7 +175,7 @@ std::vector<int> VtpClusterFactory::findPulses(const std::vector<double> &wavefo
 	return res;
 }
 
-std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fadc_hit *> &hits) {
+std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vector<nps::fadc_hit> &hits) {
 
 	const auto &vtp_cfg = m_service_vtp().getConfig();
 	const auto &fadc_cfg = m_service_fadc().getConfig();
@@ -149,7 +184,7 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 	candidates.reserve(hits.size()); // number of hits >= number of clusters
 
 	for (std::size_t i = 0; i < hits.size(); ++i) {
-		const auto *hit = hits[i];
+		const auto hit = hits[i];
 
 		nps::cluster candidate;
 		int nch = m_grid_size() * m_grid_size();
@@ -158,32 +193,33 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 		candidate.energies.reserve(nch);
 		candidate.times.reserve(nch);
 
-		candidate.channels.push_back(hit->channel);
+		candidate.channels.push_back(hit.channel);
 		candidate.hit_indices.push_back(i);
-		candidate.energies.push_back(hit->charge);
-		candidate.times.push_back(hit->time);
+		candidate.energies.push_back(hit.charge);
+		candidate.times.push_back(hit.time);
 
-		const auto it = vtp_cfg.cluster_hit_dt.find(hit->channel);
+		const auto it = vtp_cfg.cluster_hit_dt.find(hit.channel);
 		if (it == vtp_cfg.cluster_hit_dt.end()) {
 			continue; // or throw an exception
 		}
 
-		const auto clus_dt = it->second / fadc_cfg.time_interval; // in unit of time bucket
+		const auto clus_dt = it->second; // in unit of time bucket
 		for (std::size_t j = 0; j < hits.size(); ++j) {
 			if (i == j) {
 				continue;
 			}
 
-			const auto *neighbor_hit = hits[j];
-			if (std::abs(neighbor_hit->time - hit->time) > clus_dt) {
+			const auto neighbor_hit = hits[j];
+			if (std::abs(neighbor_hit.time - hit.time) > clus_dt) {
 				continue;
 			}
 
-			if (m_service_geometry().isInsideGrid(hit->channel, neighbor_hit->channel, m_grid_size())) {
-				candidate.channels.push_back(neighbor_hit->channel);
+			if (m_service_geometry().isInsideGrid(hit.channel, neighbor_hit.channel, m_grid_size())) {
+				candidate.id = static_cast<int>(i);
+				candidate.channels.push_back(neighbor_hit.channel);
 				candidate.hit_indices.push_back(j);
-				candidate.energies.push_back(neighbor_hit->charge);
-				candidate.times.push_back(neighbor_hit->time);
+				candidate.energies.push_back(neighbor_hit.charge);
+				candidate.times.push_back(neighbor_hit.time);
 			}
 		}
 		candidates.emplace_back(std::move(candidate));
@@ -241,9 +277,9 @@ bool VtpClusterFactory::isMatched(
 	match &= (seed.size == clus.channels.size());	 // same cluster size
 	match &=
 		(std::abs(seed.energy - std::accumulate(clus.energies.begin(), clus.energies.end(), 0.0)) <
-		 de_thr); // energy difference within threshold
-	// time window requirement (incorrect integration near edge due to readout window)
-	match &= (seed.time >= tmin) && (seed.time <= tmax);
+		 de_thr);										 // energy difference within threshold
+	match &= (seed.time >= tmin) && (seed.time <= tmax); // time window requirement
 	return match;
 }
+
 } // namespace nps::clustering
