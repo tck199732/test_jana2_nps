@@ -30,17 +30,36 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 	// vtp clusterization
 	std::vector<nps::cluster> candidates = selectGridCandidate(fadc_hits); // spacetime grids
 	std::vector<nps::cluster> seed_clusters;							   // seed clusters
-	seed_clusters.reserve(candidates.size());
+
+	std::vector<bool> matched_seeds(m_vtp_seeds().size(), false); // track which seeds have been matched
 
 	for (auto &candidate : candidates) {
 		if (isSeed(candidate)) {
 
+			// only take the matched clusters
 			if (m_match_seed()) {
-				populateMatchingClusters(candidates, seed_clusters, m_vtp_seeds());
-			} else {
+				for (size_t i = 0; i < m_vtp_seeds().size(); ++i) {
+					const auto *seed_ptr = m_vtp_seeds()[i];
+					if (seed_ptr == nullptr || matched_seeds[i]) {
+						continue;
+					}
+					if (isMatched(candidate, *seed_ptr, m_de_thr(), m_tmin(), m_tmax())) {
+						matched_seeds[i] = true; // mark this seed as matched
+						seed_clusters.emplace_back(std::move(candidate));
+						break; // Move to the next candidate after a match
+					}
+				}
+			}
+			// take every
+			else {
 				seed_clusters.emplace_back(std::move(candidate));
 			}
 		}
+	}
+
+	// reset cluster idx
+	for (size_t i = 0; i < seed_clusters.size(); ++i) {
+		seed_clusters[i].id = static_cast<int>(i);
 	}
 
 	for (auto &seed : seed_clusters) {
@@ -72,38 +91,6 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 			.energies = {hit.charge},
 			.times = {hit.time}
 		});
-	}
-}
-
-void VtpClusterFactory::populateMatchingClusters(
-	std::vector<nps::cluster> &in_clusters, std::vector<nps::cluster> &out_clusters,
-	const std::vector<const nps::vtp_seed *> &seeds
-) {
-
-	std::vector<bool> reco_used(in_clusters.size(), false); // which cluster to be populated
-	for (const auto *seed_ptr : seeds) {
-		if (seed_ptr == nullptr) {
-			continue;
-		}
-
-		for (size_t i = 0; i < in_clusters.size(); i++) {
-			if (reco_used[i]) {
-				continue;
-			}
-			if (isMatched(in_clusters[i], *seed_ptr, m_de_thr(), m_tmin(), m_tmax())) {
-				reco_used[i] = true;
-				break; // Move to the next seed after a match
-			}
-		}
-	}
-
-	// cluster index reset to (0, n-1) for the output clusters
-	int cluster_id = 0;
-	for (size_t i = 0; i < in_clusters.size(); i++) {
-		if (reco_used[i]) {
-			in_clusters[i].id = cluster_id++;
-			out_clusters.push_back(std::move(in_clusters[i]));
-		}
 	}
 }
 
