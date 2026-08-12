@@ -15,4 +15,5 @@ message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 
 cmake_policy(SET CMP0144 NEW)
 
+add_subdirectory(src/libs)
 add_subdirectory(src/nps)

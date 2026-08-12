@@ -37,7 +37,6 @@ add_executable(nps_onnx_app
     io/ReplaySource.cpp
     io/RandomSource.cpp
     io/EvioSroBlockSource.cpp
-    io/cnpy/cnpy.cpp
 
     clustering/BaseOnnxClusterFactory.cpp
     clustering/WaveformClusterFactory.cpp
@@ -74,6 +73,7 @@ target_link_libraries(nps_onnx_app
     ${ONNX_RUNTIME_LIB}
     CLI11::CLI11
     fmt::fmt
+    cnpy
 )
 
 set_target_properties(nps_onnx_app PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)

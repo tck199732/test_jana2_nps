@@ -11,7 +11,7 @@
 #include "struct/fadc.hpp"
 #include "struct/vtp.hpp"
 
-#include "io/cnpy/cnpy.hpp"
+#include <cnpy/cnpy.hpp>
 
 #include <algorithm>
 #include <cstddef>
