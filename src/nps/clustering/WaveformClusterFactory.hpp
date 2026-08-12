@@ -11,8 +11,8 @@
 #include "onnx/OnnxRuntimeService.hpp"
 #include "onnx/OnnxTensor.hpp"
 
-#include "struct/cluster.hpp"
 #include "struct/fadc.hpp"
+#include "struct/oc.hpp"
 
 #include <cassert>
 #include <string>
@@ -25,7 +25,7 @@ namespace nps::clustering {
 class WaveformClusterFactory : public BaseOnnxClusterFactory {
 public:
 	Input<nps::fadc_waveform> m_fadc_waveforms{this, {"fadc_waveforms"}};
-	Output<nps::cluster> m_clusters{this, "waveform_clusters"};
+	Output<nps::oc_head> m_oc_heads{this, "oc_heads"};
 
 	Service<nps::geo::NpsGeometryService> m_service_geometry{this};
 
@@ -34,7 +34,10 @@ public:
 	void Describe() const;
 
 private:
-	int GetBatchSize() override;
+	std::deque<std::vector<nps::fadc_waveform>> m_queue;
+
 	bool PrepareTensorValues() override;
+	void DeepCopyInput() override;
+	void UnpackOutput() override;
 };
 } // namespace nps::clustering

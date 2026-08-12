@@ -8,6 +8,13 @@ void BaseOnnxClusterFactory::ChangeRun(int32_t run_number) {}
 
 void BaseOnnxClusterFactory::Execute(int32_t run_nr, uint64_t event_index) {
 
+	DeepCopyInput();
+	m_event_index_queue.push_back(event_index);
+
+	if (m_event_index_queue.size() < static_cast<size_t>(m_batch_size())) {
+		return; // Wait until we have enough events to fill the batch
+	}
+
 	auto options = m_service_onnx().createSessionOptions(m_num_threads(), m_use_cuda());
 	auto &session = m_service_onnx().createSession(m_session_name(), m_model_path(), options);
 	if (!PrepareTensors(session)) {
@@ -43,6 +50,9 @@ void BaseOnnxClusterFactory::Execute(int32_t run_nr, uint64_t event_index) {
 	} catch (const Ort::Exception &e) {
 		throw std::runtime_error("ONNX Runtime inference failed: " + std::string(e.what()));
 	}
+
+	UnpackOutput();
+	m_event_index_queue.clear(); // Clear the queue after processing the batch
 }
 
 bool BaseOnnxClusterFactory::PrepareTensors(Ort::Session &session) {
@@ -62,8 +72,6 @@ void BaseOnnxClusterFactory::Describe() const {
 
 bool BaseOnnxClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 
-	int batch_size = GetBatchSize();
-
 	Ort::AllocatorWithDefaultOptions allocator;
 
 	const size_t numInputNodes = session.GetInputCount();
@@ -80,7 +88,7 @@ bool BaseOnnxClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 			shape.at(0) = 1;
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
-			shape.at(1) = batch_size;
+			shape.at(1) = m_batch_size();
 		}
 
 		for (const auto &dim : shape) {
@@ -103,7 +111,7 @@ bool BaseOnnxClusterFactory::PrepareTensorInfo(Ort::Session &session) {
 			shape.at(0) = 1;
 		}
 		if (shape.size() > 1 && shape[1] == -1) {
-			shape.at(1) = batch_size;
+			shape.at(1) = m_batch_size();
 		}
 
 		for (const auto &dim : shape) {

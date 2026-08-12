@@ -17,24 +17,16 @@ cmake_policy(SET CMP0144 NEW)
 # Fetch CLI11
 include(FetchContent)
 FetchContent_Declare(
-        CLI11
-        GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-        GIT_TAG        v2.5.0
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG        v2.5.0
 )
 FetchContent_MakeAvailable(CLI11)
 
 FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        GIT_TAG        12.1.0
-)
-FetchContent_MakeAvailable(fmt)
-
-
-FetchContent_Declare(
-        fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-        GIT_TAG        12.1.0
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG        12.1.0
 )
 FetchContent_MakeAvailable(fmt)
 
@@ -45,12 +37,14 @@ add_executable(nps_onnx_app
     io/ReplaySource.cpp
     io/RandomSource.cpp
     io/EvioSroBlockSource.cpp
+    io/cnpy/cnpy.cpp
 
     clustering/BaseOnnxClusterFactory.cpp
     clustering/WaveformClusterFactory.cpp
     clustering/HitClusterFactory.cpp
     clustering/VtpClusterFactory.cpp
     clustering/EvioParsingFactory.cpp
+    clustering/OcInferenceFactory.cpp
     
     geometry/NpsGeometryService.cpp
     calibration/fAdc250Service.cpp

@@ -24,6 +24,7 @@ class CsvWriterProcessor : public JEventProcessor {
 
 private:
 	std::string m_tag; // output tag (e.g. run number, split, etc.)
+	std::string m_dir; // output directory
 
 	// Output file streams for each cluster type
 	std::ofstream m_vtp_ofile;
@@ -55,32 +56,11 @@ public:
 	}
 
 	void Init() override {
-
-		m_tag = GetApplication()->GetParameterValue<std::string>("nps:output_tag");
-
-		m_vtp_filename = "vtp." + m_tag + ".csv";
-		m_wf_filename = "wf." + m_tag + ".csv";
-		m_hit_filename = "hit." + m_tag + ".csv";
-
-		// check if the input is activated ?
-
-		m_vtp_ofile.open(m_vtp_filename);
-		if (!m_vtp_ofile.is_open()) {
-			throw JException("Failed to open VTP cluster output file: %s", m_vtp_filename.c_str());
-		}
-		writeClusterHeader(m_vtp_ofile);
-
-		m_wf_ofile.open(m_wf_filename);
-		if (!m_wf_ofile.is_open()) {
-			throw JException("Failed to open WF cluster output file: %s", m_wf_filename.c_str());
-		}
-		writeClusterHeader(m_wf_ofile);
-
-		m_hit_ofile.open(m_hit_filename);
-		if (!m_hit_ofile.is_open()) {
-			throw JException("Failed to open HIT cluster output file: %s", m_hit_filename.c_str());
-		}
-		writeClusterHeader(m_hit_ofile);
+		m_dir = GetApplication()->GetParameterValue<std::string>("csv:output_dir");
+		m_tag = GetApplication()->GetParameterValue<std::string>("csv:output_tag");
+		m_vtp_filename = m_dir + "/vtp." + m_tag + ".csv";
+		m_wf_filename = m_dir + "/wf." + m_tag + ".csv";
+		m_hit_filename = m_dir + "/hit." + m_tag + ".csv";
 	}
 
 	void OpenIfNeeded(const JEvent &event) {
@@ -128,37 +108,30 @@ public:
 		uint64_t eventNumber = event.GetEventNumber();
 
 		if (m_vtp_opened) {
-			const auto &vtp_clusters = m_vtp_clusters();
-			for (std::size_t i = 0; i < vtp_clusters.size(); ++i) {
-				const auto *clus = vtp_clusters[i];
-				WriteClusterEntry(eventNumber, i, clus, m_vtp_ofile);
+			for (const auto *clus : m_vtp_clusters()) {
+				WriteClusterEntry(eventNumber, clus, m_vtp_ofile);
 			}
 		}
 
 		if (m_wf_opened) {
-			const auto &wf_clusters = m_wf_clusters();
-
-			for (std::size_t i = 0; i < wf_clusters.size(); ++i) {
-				const auto *clus = wf_clusters[i];
-				WriteClusterEntry(eventNumber, i, clus, m_wf_ofile);
+			for (const auto *clus : m_wf_clusters()) {
+				WriteClusterEntry(eventNumber, clus, m_wf_ofile);
 			}
 		}
 
 		if (m_hit_opened) {
-			const auto &hit_clusters = m_hit_clusters();
-
-			for (std::size_t i = 0; i < hit_clusters.size(); ++i) {
-				const auto *clus = hit_clusters[i];
-				WriteClusterEntry(eventNumber, i, clus, m_hit_ofile);
+			for (const auto *clus : m_hit_clusters()) {
+				WriteClusterEntry(eventNumber, clus, m_hit_ofile);
 			}
 		}
 	}
 
-	void WriteClusterEntry(uint64_t eventIndex, uint64_t clus_id, const nps::cluster *clus, std::ofstream &ofile) {
+	void WriteClusterEntry(uint64_t eventIndex, const nps::cluster *clus, std::ofstream &ofile) {
 
 		auto clus_size = clus->channels.size();
-
+		auto clus_id = clus->id;
 		for (size_t hit_id = 0; hit_id < clus_size; ++hit_id) {
+
 			auto ch = clus->channels[hit_id];
 			auto t = clus->times[hit_id];
 			auto e = clus->energies[hit_id];

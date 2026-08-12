@@ -9,6 +9,7 @@
 #include "onnx/OnnxTensor.hpp"
 
 #include <cassert>
+#include <deque>
 #include <string>
 #include <unordered_set>
 #include <variant>
@@ -39,19 +40,22 @@ public:
 private:
 	bool PrepareTensors(Ort::Session &session);
 	bool PrepareTensorInfo(Ort::Session &session);
-	virtual int GetBatchSize() { return 1; }
-	virtual bool PrepareTensorValues() = 0;
+	virtual bool
+	PrepareTensorValues() = 0;		  // inherit to fill the input tensors which satisfy the ONNX model's requirements
+	virtual void DeepCopyInput() = 0; // inherit to deep copy the input data into the input tensors
+	virtual void
+	UnpackOutput() = 0; // inherit to pack the output tensors into the desired output format (e.g., clusters)
 
 protected:
 	std::vector<onnx::Tensor> m_input_tensors;
 	std::vector<onnx::Tensor> m_output_tensors;
+	std::deque<uint64_t> m_event_index_queue;
 
 	Parameter<std::string> m_model_path{this, "model_path", "my_model.onnx", "Path to the ONNX model."};
-
 	Parameter<std::string> m_session_name{this, "session_name", "onnx_session", "Name of the ONNX Runtime session."};
-
 	Parameter<int> m_num_threads{this, "num_threads", 1, "Number of threads to use for ONNX Runtime."};
 	Parameter<bool> m_use_cuda{this, "use_cuda", false, "Whether to use CUDA for ONNX Runtime."};
+	Parameter<int> m_batch_size{this, "batch_size", 1, "Batch size for input tensors."};
 };
 
 } // namespace nps::clustering

@@ -48,7 +48,7 @@ private:
 	Parameter<double> m_time_interval{this, "calib:fadc_time_interval", 4.0, "Time interval of each FADC sample in ns"};
 
 	Parameter<int> m_clock_cycles{
-		this, "calib:fadc_clock_cycles", m_default_clock_cycles,
+		this, "calib:fadc_clock_cycles", 7,
 		"Number of clock cycles to wait after a pulse is detected before looking for another pulse"
 	};
 
@@ -63,9 +63,8 @@ protected:
 	double m_default_channel_threshold = 10.0;
 	double m_default_channel_gain = 1.0;
 	double m_default_channel_pedestal = 0.0;
-	int m_default_channel_nsa = 4;	// n samples before the pulse crossing threshold
-	int m_default_channel_nsb = 9;	// n samples after the pulse crossing threshold
-	int m_default_clock_cycles = 7; // deadtime (in units of time samples)
+	int m_default_channel_nsa = 4; // n samples before the pulse crossing threshold
+	int m_default_channel_nsb = 9; // n samples after the pulse crossing threshold
 };
 
 } // namespace nps::calib
