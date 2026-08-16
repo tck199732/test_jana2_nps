@@ -19,17 +19,21 @@
 #include "geometry/NpsGeometryService.hpp"
 #include "onnx/OnnxRuntimeService.hpp"
 
-#include "clustering/EvioParsingFactory.hpp"
+#include "parser/EvioParsingFactory.hpp"
+#include "parser/EvioTrgParsingFactory.hpp"
+
 #include "clustering/HitClusterFactory.hpp"
 #include "clustering/OcInferenceFactory.hpp"
 #include "clustering/VtpClusterFactory.hpp"
 #include "clustering/WaveformClusterFactory.hpp"
 
 #include "io/CsvWriterProcessor.hpp"
+#include "io/EvioHallDTrgSource.hpp"
 #include "io/EvioSroBlockSource.hpp"
 #include "io/NpyWriterProcessor.hpp"
 #include "io/RandomSource.hpp"
 #include "io/ReplaySource.hpp"
+#include "io/RootTreeWriterProcessor.hpp"
 
 struct ProgramArguments {
 	std::map<std::string, std::string> params;
@@ -127,6 +131,7 @@ int main(int argc, char *argv[]) {
 	app.Add(new JEventSourceGeneratorT<nps::io::RandomSource>);
 	app.Add(new JEventSourceGeneratorT<nps::io::ReplaySource>);
 	app.Add(new JEventSourceGeneratorT<nps::io::EvioSroBlockSource>);
+	app.Add(new JEventSourceGeneratorT<nps::io::EvioHallDTrgSource>);
 
 	if (parsedArgs.filePaths.empty()) {
 		std::cerr << "Error: No input files provided for replay source." << std::endl;
@@ -160,7 +165,7 @@ int main(int argc, char *argv[]) {
 		WaveformClusterGenerator->AddWiring(
 			"WaveformClusterFactory", // tag
 			{"fadc_waveforms"},		  // inputs
-			{"waveform_clusters"}	  // outputs
+			{"oc_heads"}			  // outputs
 		);
 		app.Add(WaveformClusterGenerator);
 	}
@@ -176,14 +181,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (enableWaveformClustering || enableHitClustering) {
-		auto EvioParsingGenerator = new JOmniFactoryGeneratorT<nps::clustering::EvioParsingFactory>();
-		EvioParsingGenerator->AddWiring(
-			"EvioParsingFactory",	  // tag
-			{"sro_block_data"},		  // inputs
-			{"fadc_hits", "oc_heads"} // outputs
-		);
-		app.Add(EvioParsingGenerator);
-
 		auto OcInferenceGenerator = new JOmniFactoryGeneratorT<nps::clustering::OcInferenceFactory>();
 		OcInferenceGenerator->AddWiring(
 			"OcInferenceFactory", // tag
@@ -193,7 +190,34 @@ int main(int argc, char *argv[]) {
 		app.Add(OcInferenceGenerator);
 	}
 
-	app.Add(new nps::io::CsvWriterProcessor());
+	if (parsedArgs.params.contains("event_source_type")) {
+		std::string eventSourceType = parsedArgs.params["event_source_type"];
+		if (eventSourceType == "nps::io::EvioSroBlockSource") {
+
+			auto EvioParsingGenerator = new JOmniFactoryGeneratorT<nps::clustering::EvioParsingFactory>();
+			EvioParsingGenerator->AddWiring(
+				"EvioParsingFactory",			// tag
+				{"sro_block_data"},				// inputs
+				{"fadc_hits", "fadc_waveforms"} // outputs
+			);
+			app.Add(EvioParsingGenerator);
+		}
+
+		else if (eventSourceType == "nps::io::EvioHallDTrgSource") {
+			auto EvioTrgParsingFactory = new JOmniFactoryGeneratorT<nps::clustering::EvioTrgParsingFactory>();
+			EvioTrgParsingFactory->AddWiring(
+				"EvioTrgParsingFactory",	// tag
+				{"evio_hd_trg_data"},		// inputs
+				{"f250_wraw", "fadc_pulse"} // outputs
+			);
+			app.Add(EvioTrgParsingFactory);
+			app.Add(new nps::io::HallDTriggerRootTreeWriterProcessor());
+		}
+	}
+
+	if (enableWaveformClustering || enableHitClustering || enableVtpClustering) {
+		app.Add(new nps::io::VtpClusterNpyWriteProcessor());
+	}
 
 	app.Initialize();
 	app.Run();
