@@ -45,4 +45,48 @@ struct fadc_cfg {
 	int accumulator_scaler_mode_mask;
 };
 
+// hall D triggered data structure for waveform
+struct fadc_window_raw_record {
+	uint32_t roc;
+	uint32_t slot;
+	uint32_t channel;
+	bool invalid_samples;
+	bool overflow;
+	uint32_t itrigger;
+	std::vector<uint16_t> samples;
+};
+
+// hall D triggered data structure for pulse
+struct fadc_pulse_record {
+
+	uint32_t roc;
+	uint32_t slot;
+	uint32_t channel;
+	uint32_t event_within_block;
+	bool qf_pedestal;
+	uint32_t pedestal;
+	uint32_t integral;
+	bool qf_nsa_beyond_ptw;
+	bool qf_overflow;
+	bool qf_underflow;
+	uint32_t nsamples_over_threshold;
+	uint32_t course_time;
+	uint32_t fine_time;
+	uint32_t pulse_peak;
+	bool qf_vpeak_beyond_nsa;
+	bool qf_vpeak_not_found;
+	bool qf_bad_pedestal;
+	uint32_t pulse_number;
+	uint32_t nsamples_integral;
+	uint32_t nsamples_pedestal;
+	bool emulated;
+	uint32_t integral_emulated;
+	uint32_t pedestal_emulated;
+	uint32_t time_emulated;
+	uint32_t course_time_emulated;
+	uint32_t fine_time_emulated;
+	uint32_t pulse_peak_emulated;
+	uint32_t qf_emulated;
+};
+
 } // namespace nps
