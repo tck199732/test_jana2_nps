@@ -34,26 +34,29 @@ FetchContent_MakeAvailable(fmt)
 # --------- CREATE TDIS EXECUTABLE ----------------
 add_executable(nps_onnx_app
     main.cpp
+
+    # event sources
     io/ReplaySource.cpp
     io/RandomSource.cpp
     io/EvioSroBlockSource.cpp
-    io/cnpy/cnpy.cpp
+    io/EvioHallDTrgSource.cpp
 
+    # parsing raw data to usable struct
+    parser/EvioTrgParsingFactory.cpp
+    parser/EvioParsingFactory.cpp
+
+    # clustering algorithms
     clustering/BaseOnnxClusterFactory.cpp
     clustering/WaveformClusterFactory.cpp
     clustering/HitClusterFactory.cpp
     clustering/VtpClusterFactory.cpp
-    clustering/EvioParsingFactory.cpp
     clustering/OcInferenceFactory.cpp
     
+    # services
     geometry/NpsGeometryService.cpp
     calibration/fAdc250Service.cpp
     calibration/VtpService.cpp
     onnx/OnnxRuntimeService.cpp
-
-    evio/sro/SroBlockReader.cpp
-    evio/sro/SroFrameSetParser.cpp
-
 )
 
 # ---------- FIND REQUIRED PACKAGES -------------
@@ -74,6 +77,10 @@ target_link_libraries(nps_onnx_app
     ${ONNX_RUNTIME_LIB}
     CLI11::CLI11
     fmt::fmt
+    cnpy
+    hdevio
+    hdevio_modules
+    evio_sro
 )
 
 set_target_properties(nps_onnx_app PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
