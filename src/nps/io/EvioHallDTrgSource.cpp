@@ -42,6 +42,8 @@ JEventSource::Result EvioHallDTrgSource::Emit(JEvent &event) {
 		}
 	}
 
+	block_data.resize(cur_len);
+
 	auto parser = new halld::evio::EvioBlockedEventParser();
 	parser->ParseBlock(block_data);
 	auto parsed_events = parser->GetParsedEvents();
