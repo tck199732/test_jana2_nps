@@ -85,12 +85,13 @@ public:
 		std::vector<std::string> fields = {
 			"event_id",	  // event number
 			"cluster_id", // cluster identifier
+			"type",		  // cluster type, see cluster_type enum
 			"hit_id",	  // hit identifier within the cluster
 			"channel",	  // channel number
 			"row_id",	  // row identifier
 			"column_id",  // column identifier
 			"energy",	  // energy
-			"time"		  // time
+			"time",		  // time
 		};
 
 		for (size_t i = 0; i < fields.size(); ++i) {
@@ -130,6 +131,7 @@ public:
 
 		auto clus_size = clus->channels.size();
 		auto clus_id = clus->id;
+		auto clus_type = static_cast<int>(clus->type);
 		for (size_t hit_id = 0; hit_id < clus_size; ++hit_id) {
 
 			auto ch = clus->channels[hit_id];
@@ -137,8 +139,8 @@ public:
 			auto e = clus->energies[hit_id];
 			auto [col, row] = m_service_geometry().getColRowFromBlock(ch);
 
-			ofile << eventIndex << "," << clus_id << "," << hit_id << "," << ch << "," << row << "," << col << "," << e
-				  << "," << t << "\n";
+			ofile << eventIndex << "," << clus_id << "," << clus_type << "," << hit_id << "," << ch << "," << row << ","
+				  << col << "," << e << "," << t << "\n";
 		}
 	}
 

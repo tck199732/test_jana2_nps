@@ -60,6 +60,8 @@ void OcInferenceFactory::InferenceDummy() {
 
 	for (size_t i = 0; i < n_clusters; ++i) {
 		nps::cluster clus;
+		clus.id = static_cast<int>(i);
+		clus.type = nps::cluster_type::TRIGGERED; // all dummy clusters are triggered
 		for (size_t h = 0; h < n_hits_per_cluster; ++h) {
 			auto energy = std::abs(acc) * (h + 1) * 0.1; // dummy energy
 			auto time = std::abs(acc) * (h + 1) * 0.01;	 // dummy time
@@ -86,6 +88,8 @@ void OcInferenceFactory::InferenceOc(const std::vector<nps::oc_head> &oc_heads) 
 
 		if (beta > m_beta_thres()) {
 			nps::cluster clus;
+			clus.id = static_cast<int>(i);
+			clus.type = nps::cluster_type::TRIGGERED;
 			double e = 0.0; // currently, the model does not predict energy.
 			double t = 0.0; // currently, the model does not predict pulse time.
 			clus.channels.push_back(ch);
