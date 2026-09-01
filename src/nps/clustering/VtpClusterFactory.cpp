@@ -57,40 +57,17 @@ void VtpClusterFactory::Execute(int32_t /*run_nr*/, uint64_t event_index) {
 		}
 	}
 
-	// reset cluster idx
 	for (size_t i = 0; i < seed_clusters.size(); ++i) {
+		// reset cluster idx
 		seed_clusters[i].id = static_cast<int>(i);
+		// update trigger flag
+		seed_clusters[i].type =
+			isTriggered(seed_clusters[i]) ? nps::cluster_type::TRIGGERED : nps::cluster_type::NOT_TRIGGERED;
 	}
 
-	for (auto &seed : seed_clusters) {
-		if (isTriggered(seed)) {
-			m_clusters().push_back(new nps::cluster(std::move(seed)));
-		}
-	}
-
-	std::vector<int> used_hits_counter(fadc_hits.size(), 0);
-	for (const auto *ptr : m_clusters()) {
-		for (const auto &hit_index : ptr->hit_indices) {
-			used_hits_counter[hit_index]++;
-		}
-	}
-
-	// unused hits form dummy clusters with id = -1
-	for (size_t hit_index = 0; hit_index < used_hits_counter.size(); ++hit_index) {
-		if (used_hits_counter[hit_index] > 0) {
-			continue;
-		}
-		if (used_hits_counter[hit_index] > 1) {
-			continue;
-		}
-		const auto &hit = fadc_hits[hit_index];
-		m_clusters().push_back(new nps::cluster{
-			.id = -1,
-			.channels = {hit.channel},
-			.hit_indices = {static_cast<int>(hit_index)},
-			.energies = {hit.charge},
-			.times = {hit.time}
-		});
+	// take everything
+	for (auto &clus : seed_clusters) {
+		m_clusters().push_back(new nps::cluster(std::move(clus)));
 	}
 }
 
@@ -205,6 +182,7 @@ std::vector<nps::cluster> VtpClusterFactory::selectGridCandidate(const std::vect
 
 			if (m_service_geometry().isInsideGrid(hit.channel, neighbor_hit.channel, m_grid_size())) {
 				candidate.id = static_cast<int>(i);
+				candidate.type = nps::cluster_type::NOT_TRIGGERED; // update later
 				candidate.channels.push_back(neighbor_hit.channel);
 				candidate.hit_indices.push_back(j);
 				candidate.energies.push_back(neighbor_hit.charge);
